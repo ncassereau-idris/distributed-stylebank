@@ -1,3 +1,4 @@
 defaults:
     - training: default
     - vgg_layers: default
+    - data: default

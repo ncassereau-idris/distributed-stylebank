@@ -1,6 +1,8 @@
 # Data
 data/
-stylebank/outputs
+outputs/
+slurm.out
+slurm.err
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

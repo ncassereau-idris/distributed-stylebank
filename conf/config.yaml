@@ -1,2 +1,3 @@
 defaults:
-        - hyperparameters: hyper_default
+        - training: default
+        - vgg_layers: default

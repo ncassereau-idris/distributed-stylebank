@@ -1,17 +1,21 @@
 # /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from omegaconf import OmegaConf
+from dataclasses import dataclass
+from omegaconf import OmegaConf, MISSING
 import hydra
 from hydra.core.config_store import ConfigStore
-from stylebank.dataclasses import Configuration
+import stylebank.dataclasses as dc
 
 
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=Configuration)
+cs.store(name="base_config", node=dc.Configuration)
+cs.store(group="training", name="base_training_conf", node=dc.TrainingConf)
+cs.store(group="vgg_layers", name="base_vgg_conf", node=dc.VGGConf)
+cs.store(group="data", name="base_data_conf", node=dc.DataConf)
 
 @hydra.main(config_path="conf", config_name="config")
-def main(cfg: Configuration) -> None:
+def main(cfg: dc.Configuration) -> None:
     print(OmegaConf.to_yaml(cfg))
 
 

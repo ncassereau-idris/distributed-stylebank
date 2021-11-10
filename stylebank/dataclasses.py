@@ -3,6 +3,7 @@
 
 from typing import Dict
 from dataclasses import dataclass, field
+from omegaconf import MISSING
 
 
 @dataclass
@@ -59,7 +60,20 @@ class VGGConf:
 
 
 @dataclass
+class DataConf:
+
+    folder: str = field(default="data", metadata={
+        "help": "name of the folder where all the data is stored"
+    })
+
+    vgg_file: str = field(default="vgg", metadata={
+        "help": "name of the file in the data folder where the pretrained VGG weights are stored"
+    })
+
+
+@dataclass
 class Configuration:
 
     training: TrainingConf = TrainingConf()
     vgg_layers: VGGConf = VGGConf()
+    data: DataConf = DataConf()

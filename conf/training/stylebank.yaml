@@ -1,3 +1,6 @@
+defaults:
+    - base_training_conf
+
 train: True
 consecutive_style_step: 2
 batch_size: 4

@@ -6,6 +6,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 import stylebank.dataclasses as dc
 from stylebank.losses_networks import init_vgg
+from stylebank.datasets import DataManager
 
 
 cs = ConfigStore.instance()
@@ -18,7 +19,7 @@ cs.store(group="data", name="base_data_conf", node=dc.DataConf)
 def main(cfg: dc.Configuration) -> None:
     print(OmegaConf.to_yaml(cfg))
 
-    print(init_vgg(cfg))
+    DataManager(cfg)
 
 
 if __name__ == "__main__":

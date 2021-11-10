@@ -66,7 +66,7 @@ class DataConf:
         "help": "name of the folder where all the data is stored"
     })
 
-    vgg_file: str = field(default="vgg", metadata={
+    vgg_file: str = field(default="data/vgg.pth", metadata={
         "help": "name of the file in the data folder where the pretrained VGG weights are stored"
     })
 

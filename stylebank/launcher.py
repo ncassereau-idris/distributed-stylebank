@@ -6,7 +6,7 @@ from networks import NetworkManager
 from trainer import Trainer
 
 
-def main(cfg):
+def launch(cfg):
     data_manager = DataManager(cfg)
     network_manager = NetworkManager(cfg)
 

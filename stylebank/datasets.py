@@ -31,10 +31,10 @@ def showimg(img):
 
 class PhotoDataset(Dataset):
 
-    def __init__(self, path, transform, quantity=None):
+    def __init__(self, path, transform, quantity=-1):
         self.filenames = glob.glob(to_absolute_path(os.path.join(path, "*.jpg")))
         self.filenames.sort()
-        if quantity is not None:
+        if quantity > -1:
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
@@ -122,6 +122,7 @@ class DataManager:
             Resize(513),
             transforms.RandomCrop([513, 513]),
             transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
         self.load_datasets()
         if self.cfg.training.train:
@@ -129,11 +130,18 @@ class DataManager:
 
     def load_datasets(self):
         log.info("Loading real pictures dataset")
-        self.content_dataset = PhotoDataset(path=self.cfg.data.photo, transform=self.transform)
+        self.content_dataset = PhotoDataset(
+            path=self.cfg.data.photo,
+            transform=self.transform
+        )
         log.info(f"Real pictures dataset has {len(self.content_dataset)} samples")
 
         log.info("Loading monet paintings dataset")
-        self.style_dataset = PaintingsDataset(path=self.cfg.data.monet, transform=self.transform)
+        self.style_dataset = PaintingsDataset(
+            path=self.cfg.data.monet,
+            transform=self.transform,
+            quantity=self.cfg.data.style_quantity
+        )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
 

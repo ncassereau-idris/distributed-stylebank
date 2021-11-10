@@ -4,4 +4,12 @@ defaults:
 folder: data
 vgg_file: "${data.folder}/vgg16-397923af.pth"
 monet: "${data.folder}/monet_jpg"
+style_quantity: 10
 photo: "${data.folder}/photo_jpg"
+
+load_model: False
+weights_subfolder: weights
+bank_weight_filename: "${data.weights_subfolder}/bank_{0}.pth"
+model_weight_filename: "${data.weights_subfolder}/model.pth"
+encoder_weight_filename: "${data.weights_subfolder}/encoder.pth"
+decoder_weight_filename: "${data.weights_subfolder}/decoder.pth"

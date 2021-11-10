@@ -7,6 +7,11 @@ import torch.nn.functional as F
 import torchvision.models as models
 from copy import deepcopy
 from hydra.utils import to_absolute_path
+import os
+import logging
+
+
+log = logging.getLogger(__name__)
 
 
 class ContentLoss(nn.Module):
@@ -62,22 +67,6 @@ class StyleLoss(nn.Module):
         return input
 
 
-class Normalization(nn.Module):
-    def __init__(self):
-        super(Normalization, self).__init__()
-        # .view the mean and std to make them [C x 1 x 1] so that they can
-        # directly work with image Tensor of shape [B x C x H x W].
-        # B is batch size. C is number of channels. H is height and W is width.
-        mean = torch.tensor([0.485, 0.456, 0.406])
-        std = torch.tensor([0.229, 0.224, 0.225])
-        self.mean = torch.tensor(mean).view(-1, 1, 1)
-        self.std = torch.tensor(std).view(-1, 1, 1)
-
-    def forward(self, img):
-        # normalize img
-        return (img - self.mean) / self.std
-
-
 def init_vgg(cfg):
     vgg = models.vgg16(pretrained=False)
     path = to_absolute_path(cfg.data.vgg_file)
@@ -92,7 +81,6 @@ class LossNetwork(nn.Module):
     def __init__(self, cfg, cnn):
         super(LossNetwork, self).__init__()
         cnn = deepcopy(cnn)
-        normalization = Normalization()
         # just in order to have an iterable access to or list of content/syle
         # losses
         content_losses = []
@@ -100,7 +88,7 @@ class LossNetwork(nn.Module):
 
         # assuming that cnn is a nn.Sequential, so we make a new nn.Sequential
         # to put in modules that are supposed to be activated sequentially
-        model = nn.Sequential(normalization)
+        model = nn.Sequential()
 
         i = 0  # increment every time we see a conv
         for layer in cnn.children():
@@ -176,3 +164,97 @@ class LossNetwork(nn.Module):
             style_loss += sl.loss
 
         return content_loss, style_loss
+
+
+class StyleBankNet(nn.Module):
+    def __init__(self, total_style):
+        super(StyleBankNet, self).__init__()
+        self.total_style = total_style
+
+        self.encoder_net = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=(9, 9), stride=2, padding=(4, 4), bias=False),
+            nn.InstanceNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=(3, 3), stride=2, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 256, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(256),
+            nn.ReLU(inplace=True),
+        )
+
+        self.decoder_net = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 32, kernel_size=(3, 3), stride=2, padding=(1, 1), bias=False),
+            nn.InstanceNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 3, kernel_size=(9, 9), stride=2, padding=(4, 4), bias=False),
+        )
+
+        self.style_bank = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+                nn.InstanceNorm2d(256),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+                nn.InstanceNorm2d(256),
+                nn.ReLU(inplace=True)
+            ) for i in range(total_style)
+        ])
+
+    def forward(self, X, style_id=None):
+        z = self.encoder_net(X)
+        if style_id is not None:
+            new_z = []
+            for idx, i in enumerate(style_id):
+                zs = self.style_bank[i](z[idx].view(1, *z[idx].shape))
+                new_z.append(zs)
+            z = torch.cat(new_z, dim=0)
+        return self.decoder_net(z)
+
+
+class NetworkManager:
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+        self.stylebank = StyleBankNet(cfg.data.style_quantity)
+        if cfg.data.load_model:
+            self.load_model()
+
+        if cfg.training.train:
+            cnn = init_vgg(cfg)
+            self.loss_network = LossNetwork(cfg, cnn)
+
+    def save_models(self):
+        try:
+            os.mkdir(self.cfg.data.weights_subfolder)
+        except FileExistsError:  # folder already exists
+            pass
+        else:
+            log.info("Created a weights subfolder to store model weights")
+        log.info("Storing model weights...")
+        torch.save(self.stylebank.state_dict(), self.cfg.data.model_weight_filename)
+        torch.save(self.stylebank.encoder_net.state_dict(), self.cfg.data.encoder_weight_filename)
+        torch.save(self.stylebank.decoder_net.state_dict(), self.cfg.data.decoder_weight_filename)
+        for i in range(len(self.stylebank.style_bank)):
+            torch.save(
+                self.stylebank.style_bank[i].state_dict(),
+                self.cfg.data.bank_weight_filename.format(i)
+            )
+        log.info("Model saved!")
+
+    def load_model(self):
+        log.info("Loading model...")
+        self.stylebank.load_state_dict(torch.load(
+            to_absolute_path(os.path.join(self.cfg.data.folder, self.cfg.data.model_weight_filename))
+        ))
+        log.info("Model loaded!")

@@ -70,6 +70,12 @@ class DataConf:
         "help": "name of the file in the data folder where the pretrained VGG weights are stored"
     })
 
+    monet: str = field(default="data/monet_jpg"), metadata={
+        "help": "name of the folder where real monet paintings are stored"
+    })
+
+    photo: str = field(default="data/photo_jpg")
+
 
 @dataclass
 class Configuration:

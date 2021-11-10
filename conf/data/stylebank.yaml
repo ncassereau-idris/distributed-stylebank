@@ -3,3 +3,5 @@ defaults:
 
 folder: data
 vgg_file: "${data.folder}/vgg16-397923af.pth"
+monet: "${data.folder}/monet_jpg"
+photo: "${data.folder}/photo_jpg"

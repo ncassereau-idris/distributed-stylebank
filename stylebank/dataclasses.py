@@ -24,6 +24,14 @@ class TrainingConf:
         "help": "Batch size used during training"
     })
 
+    repeat: int = field(default=1, metadata={
+        "help": (
+            "number of times the dataset is used in a single epoch."
+            "It is equivalent to using more epochs, but in the case where you have a small dataset "
+            "and a big batch size which does not divide the size of the dataset, it smoothes the batches"
+        )
+    })
+
     learning_rate: float = field(default=0.001, metadata={
         "help": "Learning rate applied during training"
     })
@@ -38,6 +46,22 @@ class TrainingConf:
 
     reg_weight: float = field(default=1., metadata={
         "help": "Weight of regularization loss used during training"
+    })
+
+    epochs: int = field(default=1, metadata={
+        "help": "Number of epochs for the training session"
+    })
+
+    log_interval: int = field(default=100, metadata={
+        "help": "Trainer will log every n steps"
+    })
+
+    save_interval: int = field(default=1000, metadata={
+        "help": "Trainer will save model every n steps"
+    })
+
+    adjust_learning_rate_interval: int = field(default=1000, metadata={
+        "help", "Trainer will decay learning rate every n steps"
     })
 
 

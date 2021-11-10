@@ -72,6 +72,7 @@ def init_vgg(cfg):
     path = to_absolute_path(cfg.data.vgg_file)
     vgg.load_state_dict(torch.load(path))
     vgg = vgg.features
+    vgg = vgg.cuda()
     vgg = vgg.eval()
     return vgg
 
@@ -145,7 +146,11 @@ class LossNetwork(nn.Module):
             sl.mode = 'learn'
         self.model(input)
 
-    def forward(self, input, content, style):
+    def forward(self, input, content, style=None):
+        if style is None:  # auto encoder branch
+            return F.mse_loss(input, content)
+
+        # style bank branch
         self.learn_content(content)
         self.learn_style(style)
 
@@ -226,13 +231,13 @@ class NetworkManager:
     def __init__(self, cfg):
         self.cfg = cfg
 
-        self.stylebank = StyleBankNet(cfg.data.style_quantity)
+        self.model = StyleBankNet(cfg.data.style_quantity).cuda()
         if cfg.data.load_model:
             self.load_model()
 
         if cfg.training.train:
             cnn = init_vgg(cfg)
-            self.loss_network = LossNetwork(cfg, cnn)
+            self.loss_network = LossNetwork(cfg, cnn).cuda()
 
     def save_models(self):
         try:
@@ -242,19 +247,19 @@ class NetworkManager:
         else:
             log.info("Created a weights subfolder to store model weights")
         log.info("Storing model weights...")
-        torch.save(self.stylebank.state_dict(), self.cfg.data.model_weight_filename)
-        torch.save(self.stylebank.encoder_net.state_dict(), self.cfg.data.encoder_weight_filename)
-        torch.save(self.stylebank.decoder_net.state_dict(), self.cfg.data.decoder_weight_filename)
-        for i in range(len(self.stylebank.style_bank)):
+        torch.save(self.model.state_dict(), self.cfg.data.model_weight_filename)
+        torch.save(self.model.encoder_net.state_dict(), self.cfg.data.encoder_weight_filename)
+        torch.save(self.model.decoder_net.state_dict(), self.cfg.data.decoder_weight_filename)
+        for i in range(len(self.model.style_bank)):
             torch.save(
-                self.stylebank.style_bank[i].state_dict(),
+                self.model.style_bank[i].state_dict(),
                 self.cfg.data.bank_weight_filename.format(i)
             )
         log.info("Model saved!")
 
     def load_model(self):
         log.info("Loading model...")
-        self.stylebank.load_state_dict(torch.load(
+        self.model.load_state_dict(torch.load(
             to_absolute_path(os.path.join(self.cfg.data.folder, self.cfg.data.model_weight_filename))
         ))
         log.info("Model loaded!")

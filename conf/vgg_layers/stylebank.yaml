@@ -1,0 +1,10 @@
+defaults:
+    - base_vgg_conf
+
+content:
+    conv_9: 1
+style:
+    conv_2: 1
+    conv_6: 1
+    conv_9: 1
+    conv_4: 1

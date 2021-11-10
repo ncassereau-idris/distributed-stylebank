@@ -1,2 +1,5 @@
 defaults:
-        - hyperparameters: hyper_default
+    - base_config
+    - training: stylebank
+    - vgg_layers: stylebank
+    - data: stylebank

@@ -61,7 +61,7 @@ class TrainingConf:
     })
 
     adjust_learning_rate_interval: int = field(default=1000, metadata={
-        "help", "Trainer will decay learning rate every n steps"
+        "help": "Trainer will decay learning rate every n steps"
     })
 
 

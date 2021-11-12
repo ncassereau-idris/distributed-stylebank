@@ -5,9 +5,11 @@ import logging
 from hydra.utils import to_absolute_path
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
 import torchvision.transforms.functional as TF
 from torchvision.io import read_image
 import torchvision.transforms as transforms
+import horovod.torch as hvd
 from PIL import Image
 import numpy as np
 import glob
@@ -144,9 +146,18 @@ class DataManager:
 
 
     def make_training_dataloader(self):
-        self.training_dataset = TrainingDataset(self.cfg, self.content_dataset, self.style_dataset)
+        self.training_dataset = TrainingDataset(
+            self.cfg, self.content_dataset, self.style_dataset
+        )
+        self.training_sampler = DistributedSampler(
+            self.training_dataset, 
+            num_replicas=hvd.size(), 
+            rank=hvd.rank(),
+            shuffle=True
+        )
         self.training_dataloader = DataLoader(
             self.training_dataset,
             batch_size=self.cfg.training.batch_size,
-            shuffle=True
+            sampler=self.training_sampler,
+            num_workers=10
         )

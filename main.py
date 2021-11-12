@@ -5,8 +5,7 @@ from omegaconf import OmegaConf
 import hydra
 from hydra.core.config_store import ConfigStore
 import stylebank.dataclasses as dc
-from stylebank.launcher import launch
-
+from stylebank.launcher import launch, init
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=dc.Configuration)
@@ -16,8 +15,7 @@ cs.store(group="data", name="base_data_conf", node=dc.DataConf)
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: dc.Configuration) -> None:
-    print(OmegaConf.to_yaml(cfg))
-
+    init(cfg)
     launch(cfg)
 
 

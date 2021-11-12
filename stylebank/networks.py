@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+import horovod.torch as hvd
 from copy import deepcopy
 from hydra.utils import to_absolute_path
 import os
@@ -232,14 +233,18 @@ class NetworkManager:
         self.cfg = cfg
 
         self.model = StyleBankNet(cfg.data.style_quantity).cuda()
-        if cfg.data.load_model:
+        if cfg.data.load_model and hvd.rank() == 0:
             self.load_model()
+
+        hvd.broadcast_parameters(self.model.state_dict(), root_rank=0)
 
         if cfg.training.train:
             cnn = init_vgg(cfg)
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
     def save_models(self):
+        if hvd.rank() != 0:
+            log.info("Not rank 0, model not saved")
         try:
             os.mkdir(self.cfg.data.weights_subfolder)
         except FileExistsError:  # folder already exists

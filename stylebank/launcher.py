@@ -18,19 +18,24 @@ class Rank0Filter(logging.Filter):
         """
         return hvd.rank() == 0
 
+
 def init(cfg):
     hvd.init()
-    loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+    loggers = [
+        logging.getLogger(name)
+        for name in logging.root.manager.loggerDict
+    ]
     for logger in loggers:
         logger.addFilter(Rank0Filter())
 
-    log = logging.getLogger(__name__)
-    log.info("\n" + OmegaConf.to_yaml(cfg)+ "\n")
-    log.info(" | ".join([
-        "Horovod initialized",
-        f"World size: {hvd.size()}",
-        f"GPUs per node: {hvd.local_size()}"
-    ]))
+    if hvd.rank() == 0:
+        log = logging.getLogger(__name__)
+        log.info("\n" + OmegaConf.to_yaml(cfg) + "\n")
+        log.info(" | ".join([
+            "Horovod initialized",
+            f"World size: {hvd.size()}",
+            f"GPUs per node: {hvd.local_size()}"
+        ]))
 
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -38,6 +43,7 @@ def init(cfg):
     if torch.cuda.is_available():
         torch.cuda.set_device(hvd.local_rank())
         torch.cuda.manual_seed(cfg.seed)
+
 
 def launch(cfg):
     data_manager = DataManager(cfg)

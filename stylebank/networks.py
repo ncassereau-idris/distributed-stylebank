@@ -99,16 +99,15 @@ class LossNetwork(nn.Module):
                 name = 'conv_{}'.format(i)
             elif isinstance(layer, nn.ReLU):
                 name = 'relu_{}'.format(i)
-                # The in-place version doesn't play very nicely with the ContentLoss
-                # and StyleLoss we insert below. So we replace with out-of-place
-                # ones here.
                 layer = nn.ReLU(inplace=False)
             elif isinstance(layer, nn.MaxPool2d):
                 name = 'pool_{}'.format(i)
             elif isinstance(layer, nn.BatchNorm2d):
                 name = 'bn_{}'.format(i)
             else:
-                raise RuntimeError('Unrecognized layer: {}'.format(layer.__class__.__name__))
+                raise RuntimeError(
+                    'Unrecognized layer: {}'.format(layer.__class__.__name__)
+                )
 
             model.add_module(name, layer)
 
@@ -124,7 +123,10 @@ class LossNetwork(nn.Module):
 
         # now we trim off the layers after the last content and style losses
         for i in range(len(model) - 1, -1, -1):
-            if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
+            if (
+                isinstance(model[i], ContentLoss) or
+                isinstance(model[i], StyleLoss)
+            ):
                 break
 
         model = model[:(i + 1)]
@@ -178,39 +180,69 @@ class StyleBankNet(nn.Module):
         self.total_style = total_style
 
         self.encoder_net = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=(9, 9), stride=2, padding=(4, 4), bias=False),
+            nn.Conv2d(
+                3, 32, kernel_size=(9, 9), stride=2,
+                padding=(4, 4), bias=False
+            ),
             nn.InstanceNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=(3, 3), stride=2, padding=(1, 1), bias=False),
+            nn.Conv2d(
+                32, 64, kernel_size=(3, 3), stride=2,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.Conv2d(
+                64, 128, kernel_size=(3, 3), stride=1,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(128),
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, 256, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.Conv2d(
+                128, 256, kernel_size=(3, 3), stride=1,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(256),
             nn.ReLU(inplace=True),
         )
 
         self.decoder_net = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.ConvTranspose2d(
+                256, 128, kernel_size=(3, 3), stride=1,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(128),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(128, 64, kernel_size=(3, 3), stride=1, padding=(1, 1), bias=False),
+            nn.ConvTranspose2d(
+                128, 64, kernel_size=(3, 3), stride=1,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 32, kernel_size=(3, 3), stride=2, padding=(1, 1), bias=False),
+            nn.ConvTranspose2d(
+                64, 32, kernel_size=(3, 3), stride=2,
+                padding=(1, 1), bias=False
+            ),
             nn.InstanceNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, 3, kernel_size=(9, 9), stride=2, padding=(4, 4), bias=False),
+            nn.ConvTranspose2d(
+                32, 3, kernel_size=(9, 9), stride=2,
+                padding=(4, 4), bias=False
+            ),
         )
 
         self.style_bank = nn.ModuleList([
             nn.Sequential(
-                nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+                nn.Conv2d(
+                    256, 256, kernel_size=(3, 3), stride=(1, 1),
+                    padding=(1, 1), bias=False
+                ),
                 nn.InstanceNorm2d(256),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+                nn.Conv2d(
+                    256, 256, kernel_size=(3, 3), stride=(1, 1),
+                    padding=(1, 1), bias=False
+                ),
                 nn.InstanceNorm2d(256),
                 nn.ReLU(inplace=True)
             ) for i in range(total_style)
@@ -252,9 +284,18 @@ class NetworkManager:
         else:
             log.info("Created a weights subfolder to store model weights")
         log.info("Storing model weights...")
-        torch.save(self.model.state_dict(), self.cfg.data.model_weight_filename)
-        torch.save(self.model.encoder_net.state_dict(), self.cfg.data.encoder_weight_filename)
-        torch.save(self.model.decoder_net.state_dict(), self.cfg.data.decoder_weight_filename)
+        torch.save(
+            self.model.state_dict(),
+            self.cfg.data.model_weight_filename
+        )
+        torch.save(
+            self.model.encoder_net.state_dict(),
+            self.cfg.data.encoder_weight_filename
+        )
+        torch.save(
+            self.model.decoder_net.state_dict(),
+            self.cfg.data.decoder_weight_filename
+        )
         for i in range(len(self.model.style_bank)):
             torch.save(
                 self.model.style_bank[i].state_dict(),
@@ -264,7 +305,10 @@ class NetworkManager:
 
     def load_model(self):
         log.info("Loading model...")
-        self.model.load_state_dict(torch.load(
-            to_absolute_path(os.path.join(self.cfg.data.folder, self.cfg.data.model_weight_filename))
-        ))
+        self.model.load_state_dict(torch.load(to_absolute_path(
+            os.path.join(
+                self.cfg.data.folder,
+                self.cfg.data.model_weight_filename
+            )
+        )))
         log.info("Model loaded!")

@@ -67,7 +67,6 @@ class TrainingData:
         self.reconstruction_loss = 0.
         self.regularizer_loss = 0.
 
-
     def update(
         self,
         style_loss=None,
@@ -140,7 +139,8 @@ class Trainer:
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
         log.info(
-            f"Epoch {epoch} | Step {step % steps_per_epoch} / {steps_per_epoch} | " +
+            f"Epoch {epoch} | " +
+            f"Step {step % steps_per_epoch} / {steps_per_epoch} | " +
             self.training_data.log() +
             f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
@@ -162,7 +162,7 @@ class Trainer:
         dataloader = self.data_manager.training_dataloader
         step = 0
         self.adjust_learning_rate(step)
-        T = self.cfg.training.consecutive_style_step +1
+        T = self.cfg.training.consecutive_style_step + 1
 
         self.train_beginning = time.perf_counter()
 
@@ -172,9 +172,6 @@ class Trainer:
             self.epoch_beginning = time.perf_counter()
             for content, (style_id, style) in dataloader:
                 step += 1
-
-                batch_size = content.shape[0]
-                assert style.shape[0] == batch_size and style_id.shape[0] == batch_size
 
                 content = content.cuda()
                 style = style.cuda()
@@ -194,28 +191,38 @@ class Trainer:
                     self.network_manager.save_models()
 
                 if step % self.cfg.training.adjust_learning_rate_interval == 0:
-                    lr_step = step / self.cfg.training.adjust_learning_rate_interval
+                    lr_step = (
+                        step /
+                        self.cfg.training.adjust_learning_rate_interval
+                    )
                     new_lr = self.adjust_learning_rate(lr_step)
                     log.info(f"Learning rate decay: {new_lr:.6f}")
 
             self.log_epoch(epoch)
             self.training_data.reset(reset_epoch_average=True)
 
+        total_duration = self.current_time - self.train_beginning
         log.info(
             "End of training (Total duration: "
-            f"{self.format_duration(self.current_time - self.train_beginning)})"
+            f"{self.format_duration(total_duration)})"
         )
 
     def _train_style_bank(self, content, style_id, style):
         self.optimizer.zero_grad()
         output_image = self.network_manager.model(content, style_id)
 
-        content_loss, style_loss = self.network_manager.loss_network(output_image, content, style)
+        content_loss, style_loss = self.network_manager.loss_network(
+            output_image, content, style
+        )
         content_loss *= self.cfg.training.content_weight
         style_loss *= self.cfg.training.style_weight
 
-        diff_i = torch.sum(torch.abs(output_image[:, :, :, 1:] - output_image[:, :, :, :-1]))
-        diff_j = torch.sum(torch.abs(output_image[:, :, 1:, :] - output_image[:, :, :-1, :]))
+        diff_i = torch.sum(
+            torch.abs(output_image[:, :, :, 1:] - output_image[:, :, :, :-1])
+        )
+        diff_j = torch.sum(
+            torch.abs(output_image[:, :, 1:, :] - output_image[:, :, :-1, :])
+        )
         tv_loss = self.cfg.training.reg_weight * (diff_i + diff_j)
 
         total_loss = content_loss + style_loss + tv_loss

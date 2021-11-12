@@ -3,7 +3,6 @@
 
 from typing import Dict
 from dataclasses import dataclass, field
-from omegaconf import MISSING
 
 
 @dataclass
@@ -15,8 +14,9 @@ class TrainingConf:
 
     consecutive_style_step: int = field(default=1, metadata={
         "help": (
-            "Stylebank uses a (T+1)-steps training strategy where the style branch is trained T"
-            "consecutive steps before the autoencoder branch is trained for one step."
+            "Stylebank uses a (T+1)-steps training strategy where the "
+            "style branch is trained T consecutive steps before the "
+            "autoencoder branch is trained for one step."
         )
     })
 
@@ -27,8 +27,9 @@ class TrainingConf:
     repeat: int = field(default=1, metadata={
         "help": (
             "number of times the dataset is used in a single epoch."
-            "It is equivalent to using more epochs, but in the case where you have a small dataset "
-            "and a big batch size which does not divide the size of the dataset, it smoothes the batches"
+            "It is equivalent to using more epochs, but in the case "
+            "where you have a small dataset and a big batch size which "
+            "does not divide the size of the dataset, it smoothes the batches"
         )
     })
 
@@ -70,15 +71,17 @@ class VGGConf:
 
     content: Dict[str, float] = field(default_factory=dict, metadata={
         "help": (
-            "Dictionary where keys refer to VGG layers names to consider for content loss "
-            "and values the weight for the aforementioned loss"
+            "Dictionary where keys refer to VGG layers names to consider "
+            "for content loss and values the weight for the "
+            "aforementioned loss"
         )
     })
 
     style: Dict[str, float] = field(default_factory=dict, metadata={
         "help": (
-            "Dictionary where keys refer to VGG layers names to consider for style loss "
-            "and values the weight for the aforementioned loss"
+            "Dictionary where keys refer to VGG layers names to consider "
+            "for style loss and values the weight for the "
+            "aforementioned loss"
         )
     })
 
@@ -91,7 +94,10 @@ class DataConf:
     })
 
     vgg_file: str = field(default="data/vgg.pth", metadata={
-        "help": "name of the file in the data folder where the pretrained VGG weights are stored"
+        "help": (
+            "name of the file in the data folder where the pretrained "
+            "VGG weights are stored"
+        )
     })
 
     monet: str = field(default="data/monet_jpg", metadata={
@@ -103,32 +109,50 @@ class DataConf:
     })
 
     photo: str = field(default="data/photo_jpg", metadata={
-        "help": "name of the folder where real pictures (to be monet-fied) are stored"
+        "help": (
+            "name of the folder where real pictures (to be monet-fied)"
+            " are stored"
+        )
     })
 
     load_model: bool = field(default=False, metadata={
-        "help": "whether or not we should load pretrained weights in the data folder"
+        "help": (
+            "whether or not we should load pretrained weights in the "
+            "data folder"
+        )
     })
 
     weights_subfolder: str = field(default="weights", metadata={
         "help": "name of the directory of model weights"
     })
 
-    bank_weight_filename: str = field(default="weights/bank_{0}.pth", metadata={
-        "help": "filename for each style bank"
-    })
+    bank_weight_filename: str = field(
+        default="weights/bank_{0}.pth",
+        metadata={
+            "help": "filename for each style bank"
+        }
+    )
 
-    model_weight_filename: str = field(default="weights/model.pth", metadata={
-        "help": "filename for model weights"
-    })
+    model_weight_filename: str = field(
+        default="weights/model.pth",
+        metadata={
+            "help": "filename for model weights"
+        }
+    )
 
-    encoder_weight_filename: str = field(default="weights/encoder.pth", metadata={
-        "help": "filename for encoder weights"
-    })
+    encoder_weight_filename: str = field(
+        default="weights/encoder.pth",
+        metadata={
+            "help": "filename for encoder weights"
+        }
+    )
 
-    decoder_weight_filename: str = field(default="weights/decoder.pth", metadata={
-        "help": "filename for decoder weights"
-    })
+    decoder_weight_filename: str = field(
+        default="weights/decoder.pth",
+        metadata={
+            "help": "filename for decoder weights"
+        }
+    )
 
 
 @dataclass

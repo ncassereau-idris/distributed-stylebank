@@ -26,7 +26,7 @@ class PhotoDataset(Dataset):
             to_absolute_path(os.path.join(path, "*.jpg"))
         )
         self.filenames.sort()
-        if quantity > -1:
+        if quantity > 0:
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform

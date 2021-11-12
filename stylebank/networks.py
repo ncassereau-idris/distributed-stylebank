@@ -261,10 +261,10 @@ class StyleBankNet(nn.Module):
 
 class NetworkManager:
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, style_quantity):
         self.cfg = cfg
 
-        self.model = StyleBankNet(cfg.data.style_quantity).cuda()
+        self.model = StyleBankNet(style_quantity).cuda()
         if cfg.data.load_model and hvd.rank() == 0:
             self.load_model()
 
@@ -277,6 +277,7 @@ class NetworkManager:
     def save_models(self):
         if hvd.rank() != 0:
             log.info("Not rank 0, model not saved")
+            return
         try:
             os.mkdir(self.cfg.data.weights_subfolder)
         except FileExistsError:  # folder already exists

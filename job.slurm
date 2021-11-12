@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=tmp
+#SBATCH --job-name=monet
 #SBATCH --output=slurm.out
 #SBATCH --error=slurm.err
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
-#SBATCH --time=01:00:00
-#SBATCH --gres=gpu:2
-#SBATCH --account=sos@gpu
-#SBATCH --qos=qos_gpu-dev
+#SBATCH --ntasks-per-node=4
+#SBATCH --time=50:00:00
+#SBATCH --gres=gpu:4
+#SBATCH --account=dwd@gpu
+#SBATCH --qos=qos_gpu-t4
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 

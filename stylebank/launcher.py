@@ -47,7 +47,7 @@ def init(cfg):
 
 def launch(cfg):
     data_manager = DataManager(cfg)
-    network_manager = NetworkManager(cfg)
+    network_manager = NetworkManager(cfg, len(data_manager.style_dataset))
 
     if cfg.training.train:
         Trainer(cfg, data_manager, network_manager).train()

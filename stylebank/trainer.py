@@ -98,11 +98,11 @@ class TrainingData:
 
     def log_epoch(self):
         losses = [
-            f"Total loss: {str(self.epoch_total_loss):.6f}",
-            f"Content loss: {str(self.epoch_content_loss):.6f}",
-            f"Style loss: {str(self.epoch_style_loss):.6f}",
-            f"Regularizer loss: {str(self.epoch_regularizer_loss):.6f}",
-            f"Reconstruction loss: {str(self.epoch_reconstruction_loss):.6f}",
+            f"Total loss: {str(self.epoch_total_loss)}",
+            f"Content loss: {str(self.epoch_content_loss)}",
+            f"Style loss: {str(self.epoch_style_loss)}",
+            f"Regularizer loss: {str(self.epoch_regularizer_loss)}",
+            f"Reconstruction loss: {str(self.epoch_reconstruction_loss)}",
         ]
         return " | ".join(losses)
 
@@ -123,7 +123,7 @@ class Trainer:
 
         self.training_data = TrainingData()
 
-    def adjust_learning_rate(optimizer, step):
+    def adjust_learning_rate(self, optimizer, step):
         lr = self.cfg.training.learning_rate
         lr = max(lr * (0.8 ** (step)), 1e-6)
         for param_group in optimizer.param_groups:
@@ -137,7 +137,7 @@ class Trainer:
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
         log.info(
-            f"Epoch {epoch} | Step {step} / {steps_per_epoch} | " +
+            f"Epoch {epoch} | Step {step % steps_per_epoch} / {steps_per_epoch} | " +
             self.training_data.log() +
             f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
             f" | Wall (training): {self.format_duration(duration_training)}"
@@ -161,7 +161,7 @@ class Trainer:
         self.train_beginning = time.perf_counter()
 
         log.info("Beginning training")
-        for epoch in range(self.cfg.training.epochs):
+        for epoch in range(1, self.cfg.training.epochs + 1):
             log.info(f"Epoch {epoch} / {self.cfg.training.epochs}")
             self.epoch_beginning = time.perf_counter()
             for content, (style_id, style) in dataloader:
@@ -203,7 +203,7 @@ class Trainer:
 
     def _train_style_bank(self, content, style_id, style):
         self.optimizer.zero_grad()
-        output_image = self.network_manager.model(data, style_id)
+        output_image = self.network_manager.model(content, style_id)
 
         content_loss, style_loss = self.network_manager.loss_network(output_image, content, style)
         content_loss *= self.cfg.training.content_weight

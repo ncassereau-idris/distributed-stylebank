@@ -3,7 +3,7 @@ defaults:
 
 train: True
 consecutive_style_step: 2
-batch_size: 4
+batch_size: 5
 repeat: 100
 learning_rate: 0.001
 content_weight: 1

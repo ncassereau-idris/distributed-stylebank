@@ -3,6 +3,7 @@
 
 import torch
 import torch.optim as optim
+import horovod.torch as hvd
 from dataclasses import dataclass
 import logging
 import time
@@ -66,7 +67,6 @@ class TrainingData:
         self.reconstruction_loss = 0.
         self.regularizer_loss = 0.
 
-
     def update(
         self,
         style_loss=None,
@@ -115,18 +115,20 @@ class Trainer:
         self.data_manager = data_manager
         self.network_manager = network_manager
 
-        self.optimizer = optim.Adam(self.network_manager.model.parameters())
-        self.optimizer_ae = optim.Adam([
-            {'params': self.network_manager.model.encoder_net.parameters()},
-            {'params': self.network_manager.model.decoder_net.parameters()}
-        ], lr=cfg.training.learning_rate)
+        self.optimizer = hvd.DistributedOptimizer(
+            optim.Adam(self.network_manager.model.parameters()),
+            named_parameters=self.network_manager.model.named_parameters()
+        )
 
+        hvd.broadcast_optimizer_state(self.optimizer, root_rank=0)
+
+        self.effective_batch_size = cfg.training.batch_size * hvd.size()
         self.training_data = TrainingData()
 
-    def adjust_learning_rate(self, optimizer, step):
-        lr = self.cfg.training.learning_rate
+    def adjust_learning_rate(self, step):
+        lr = self.cfg.training.learning_rate * hvd.size()
         lr = max(lr * (0.8 ** (step)), 1e-6)
-        for param_group in optimizer.param_groups:
+        for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         return lr
 
@@ -137,8 +139,10 @@ class Trainer:
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
         log.info(
-            f"Epoch {epoch} | Step {step % steps_per_epoch} / {steps_per_epoch} | " +
+            f"Epoch {epoch} | " +
+            f"Step {step % steps_per_epoch} / {steps_per_epoch} | " +
             self.training_data.log() +
+            f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
             f" | Wall (training): {self.format_duration(duration_training)}"
         )
@@ -149,6 +153,7 @@ class Trainer:
         log.info(
             f"Epoch {epoch} / {self.cfg.training.epochs} | " +
             self.training_data.log_epoch() +
+            f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
             f" | Wall (training): {self.format_duration(duration_training)}"
         )
@@ -156,7 +161,8 @@ class Trainer:
     def train(self):
         dataloader = self.data_manager.training_dataloader
         step = 0
-        T = self.cfg.training.consecutive_style_step +1
+        self.adjust_learning_rate(step)
+        T = self.cfg.training.consecutive_style_step + 1
 
         self.train_beginning = time.perf_counter()
 
@@ -166,9 +172,6 @@ class Trainer:
             self.epoch_beginning = time.perf_counter()
             for content, (style_id, style) in dataloader:
                 step += 1
-
-                batch_size = content.shape[0]
-                assert style.shape[0] == batch_size and style_id.shape[0] == batch_size
 
                 content = content.cuda()
                 style = style.cuda()
@@ -188,29 +191,38 @@ class Trainer:
                     self.network_manager.save_models()
 
                 if step % self.cfg.training.adjust_learning_rate_interval == 0:
-                    lr_step = step / self.cfg.training.adjust_learning_rate_interval
-                    self.adjust_learning_rate(self.optimizer, lr_step)
-                    new_lr = self.adjust_learning_rate(self.optimizer_ae, lr_step)
+                    lr_step = (
+                        step /
+                        self.cfg.training.adjust_learning_rate_interval
+                    )
+                    new_lr = self.adjust_learning_rate(lr_step)
                     log.info(f"Learning rate decay: {new_lr:.6f}")
 
             self.log_epoch(epoch)
             self.training_data.reset(reset_epoch_average=True)
 
+        total_duration = self.current_time - self.train_beginning
         log.info(
             "End of training (Total duration: "
-            f"{self.format_duration(self.current_time - self.train_beginning)})"
+            f"{self.format_duration(total_duration)})"
         )
 
     def _train_style_bank(self, content, style_id, style):
         self.optimizer.zero_grad()
         output_image = self.network_manager.model(content, style_id)
 
-        content_loss, style_loss = self.network_manager.loss_network(output_image, content, style)
+        content_loss, style_loss = self.network_manager.loss_network(
+            output_image, content, style
+        )
         content_loss *= self.cfg.training.content_weight
         style_loss *= self.cfg.training.style_weight
 
-        diff_i = torch.sum(torch.abs(output_image[:, :, :, 1:] - output_image[:, :, :, :-1]))
-        diff_j = torch.sum(torch.abs(output_image[:, :, 1:, :] - output_image[:, :, :-1, :]))
+        diff_i = torch.sum(
+            torch.abs(output_image[:, :, :, 1:] - output_image[:, :, :, :-1])
+        )
+        diff_j = torch.sum(
+            torch.abs(output_image[:, :, 1:, :] - output_image[:, :, :-1, :])
+        )
         tv_loss = self.cfg.training.reg_weight * (diff_i + diff_j)
 
         total_loss = content_loss + style_loss + tv_loss
@@ -224,9 +236,9 @@ class Trainer:
         )
 
     def _train_auto_encoder(self, content):
-        self.optimizer_ae.zero_grad()
+        self.optimizer.zero_grad()
         output_image = self.network_manager.model(content)
         loss = self.network_manager.loss_network(output_image, content)
         loss.backward()
-        self.optimizer_ae.step()
+        self.optimizer.step()
         self.training_data.update(reconstruction_loss=loss)

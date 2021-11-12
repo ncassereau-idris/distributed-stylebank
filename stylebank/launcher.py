@@ -5,12 +5,11 @@ from omegaconf import OmegaConf
 import torch
 import horovod.torch as hvd
 import logging
+import numpy as np
 from .datasets import DataManager
 from .networks import NetworkManager
 from .trainer import Trainer
 
-
-log = logging.getLogger(__name__)
 
 class Rank0Filter(logging.Filter):
     def filter(self, record):
@@ -33,8 +32,12 @@ def init(cfg):
         f"GPUs per node: {hvd.local_size()}"
     ]))
 
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
+
     if torch.cuda.is_available():
         torch.cuda.set_device(hvd.local_rank())
+        torch.cuda.manual_seed(cfg.seed)
 
 def launch(cfg):
     data_manager = DataManager(cfg)

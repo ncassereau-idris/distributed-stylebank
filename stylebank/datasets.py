@@ -15,7 +15,6 @@ import numpy as np
 import glob
 import os
 # import matplotlib.pyplot as plt
-import random
 
 
 log = logging.getLogger(__name__)
@@ -96,7 +95,7 @@ class TrainingDataset(Dataset):
 
     def __getitem__(self, idx):
         return (
-            self.content_dataset[random.randrange(len(self.content_dataset))], 
+            self.content_dataset[np.random.randint(len(self.content_dataset))], 
             self.style_dataset[idx // self.cfg.training.repeat]
         )
 

@@ -21,7 +21,7 @@ class TrainingConf:
     })
 
     batch_size: int = field(default=4, metadata={
-        "help": "Batch size used during training"
+        "help": "Batch size used during training per GPU"
     })
 
     repeat: int = field(default=1, metadata={
@@ -137,3 +137,7 @@ class Configuration:
     training: TrainingConf = TrainingConf()
     vgg_layers: VGGConf = VGGConf()
     data: DataConf = DataConf()
+
+    seed: int = field(default=4, metadata={
+        "help": "seed"
+    })

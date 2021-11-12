@@ -30,6 +30,7 @@ class MovingAverage:
     def __str__(self):
         return f"{self.data:.6f}"
 
+
 @dataclass
 class TrainingData:
 

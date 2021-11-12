@@ -20,6 +20,6 @@ set -x
 
 echo "START TIME: $(date)"
 
-srun python3 main.py
+srun python3 main.py hydra/launcher=submitit_slurm
 
 echo "END TIME: $(date)"

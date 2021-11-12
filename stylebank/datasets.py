@@ -12,22 +12,22 @@ from PIL import Image
 import numpy as np
 import glob
 import os
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import random
 
 
 log = logging.getLogger(__name__)
 
 
-def showimg(img):
-    """
-    Input a pytorch image tensor with size (channel, width, height) and display it.
-    """
-    img = img.clamp(min=0, max=1)
-    #img = img.cpu().numpy().transpose(1, 2, 0)
-    img = img.numpy().transpose(1, 2, 0)
-    plt.imshow(img)
-    plt.show()
+# def showimg(img):
+#     """
+#     Input a pytorch image tensor with size (channel, width, height) and display it.
+#     """
+#     img = img.clamp(min=0, max=1)
+#     #img = img.cpu().numpy().transpose(1, 2, 0)
+#     img = img.numpy().transpose(1, 2, 0)
+#     plt.imshow(img)
+#     plt.show()
 
 
 class PhotoDataset(Dataset):

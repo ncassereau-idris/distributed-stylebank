@@ -1,9 +1,9 @@
 # /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datasets import DataManager
-from networks import NetworkManager
-from trainer import Trainer
+from .datasets import DataManager
+from .networks import NetworkManager
+from .trainer import Trainer
 
 
 def launch(cfg):

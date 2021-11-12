@@ -12,21 +12,22 @@ from PIL import Image
 import numpy as np
 import glob
 import os
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+import random
 
 
 log = logging.getLogger(__name__)
 
 
-def showimg(img):
-    """
-    Input a pytorch image tensor with size (channel, width, height) and display it.
-    """
-    img = img.clamp(min=0, max=1)
-    #img = img.cpu().numpy().transpose(1, 2, 0)
-    img = img.numpy().transpose(1, 2, 0)
-    plt.imshow(img)
-    plt.show()
+# def showimg(img):
+#     """
+#     Input a pytorch image tensor with size (channel, width, height) and display it.
+#     """
+#     img = img.clamp(min=0, max=1)
+#     #img = img.cpu().numpy().transpose(1, 2, 0)
+#     img = img.numpy().transpose(1, 2, 0)
+#     plt.imshow(img)
+#     plt.show()
 
 
 class PhotoDataset(Dataset):
@@ -83,22 +84,19 @@ class PaintingsDataset(PhotoDataset):
 
 class TrainingDataset(Dataset):
 
-    def __init__(self, datasets, truncate=False):
-        self.datasets = datasets
-        assert len(self.datasets) > 0
-        self.truncate = truncate # if not truncate, replicated
+    def __init__(self, cfg, content_dataset, style_dataset):
+        self.cfg = cfg
+        self.content_dataset = content_dataset
+        self.style_dataset = style_dataset
 
     def __len__(self):
-        if self.truncate:
-            return min(len(dataset) for dataset in self.datasets)
-        return max(len(dataset) for dataset in self.datasets)
+        return self.cfg.training.repeat * len(self.style_dataset)
 
     def __getitem__(self, idx):
-        ret = []
-        for dataset in self.datasets:
-            i = idx % len(dataset)
-            ret.append(dataset[i])
-        return ret
+        return (
+            self.content_dataset[random.randrange(len(self.content_dataset))], 
+            self.style_dataset[idx // self.cfg.training.repeat]
+        )
 
 
 class Resize(object):
@@ -146,7 +144,7 @@ class DataManager:
 
 
     def make_training_dataloader(self):
-        self.training_dataset = TrainingDataset([self.content_dataset, self.style_dataset])
+        self.training_dataset = TrainingDataset(self.cfg, self.content_dataset, self.style_dataset)
         self.training_dataloader = DataLoader(
             self.training_dataset,
             batch_size=self.cfg.training.batch_size,

@@ -5,8 +5,7 @@ from omegaconf import OmegaConf
 import hydra
 from hydra.core.config_store import ConfigStore
 import stylebank.dataclasses as dc
-from stylebank.losses_networks import NetworkManager
-from stylebank.datasets import DataManager
+from stylebank.launcher import launch
 
 
 cs = ConfigStore.instance()
@@ -19,8 +18,7 @@ cs.store(group="data", name="base_data_conf", node=dc.DataConf)
 def main(cfg: dc.Configuration) -> None:
     print(OmegaConf.to_yaml(cfg))
 
-    DataManager(cfg)
-    NetworkManager(cfg).save_models()
+    launch(cfg)
 
 
 if __name__ == "__main__":

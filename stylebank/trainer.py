@@ -140,7 +140,7 @@ class Trainer:
         duration_training = self.current_time - self.train_beginning
         log.info(
             f"Epoch {epoch} | " +
-            f"Step {step % steps_per_epoch} / {steps_per_epoch} | " +
+            f"Step {step} / {steps_per_epoch} | " +
             self.training_data.log() +
             f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
@@ -170,8 +170,10 @@ class Trainer:
         for epoch in range(1, self.cfg.training.epochs + 1):
             log.info(f"Epoch {epoch} / {self.cfg.training.epochs}")
             self.epoch_beginning = time.perf_counter()
+            local_step = 0
             for content, (style_id, style) in dataloader:
                 step += 1
+                local_step += 1
 
                 content = content.cuda()
                 style = style.cuda()
@@ -183,8 +185,8 @@ class Trainer:
 
                 self.current_time = time.perf_counter()
 
-                if step % self.cfg.training.log_interval == 0:
-                    self.log(epoch, step, len(dataloader))
+                if local_step % self.cfg.training.log_interval == 0:
+                    self.log(epoch, local_step, len(dataloader))
                     self.training_data.reset()
 
                 if step % self.cfg.training.save_interval == 0:

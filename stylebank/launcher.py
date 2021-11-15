@@ -10,6 +10,7 @@ from .datasets import DataManager
 from .networks import NetworkManager
 from .trainer import Trainer
 
+log = logging.getLogger(__name__)
 
 class Rank0Filter(logging.Filter):
     def filter(self, record):
@@ -21,21 +22,16 @@ class Rank0Filter(logging.Filter):
 
 def init(cfg):
     hvd.init()
-    loggers = [
-        logging.getLogger(name)
-        for name in logging.root.manager.loggerDict
-    ]
-    for logger in loggers:
-        logger.addFilter(Rank0Filter())
 
-    if hvd.rank() == 0:
-        log = logging.getLogger(__name__)
-        log.info("\n" + OmegaConf.to_yaml(cfg) + "\n")
-        log.info(" | ".join([
-            "Horovod initialized",
-            f"World size: {hvd.size()}",
-            f"GPUs per node: {hvd.local_size()}"
-        ]))
+    for handler in logging.root.handlers:
+        handler.addFilter(Rank0Filter())
+
+    log.info("\n" + OmegaConf.to_yaml(cfg) + "\n")
+    log.info(" | ".join([
+        "Horovod initialized",
+        f"World size: {hvd.size()}",
+        f"GPUs per node: {hvd.local_size()}"
+    ]))
 
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)

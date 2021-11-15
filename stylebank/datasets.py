@@ -14,6 +14,7 @@ from PIL import Image
 import numpy as np
 import glob
 import os
+import multiprocessing
 
 
 log = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ log = logging.getLogger(__name__)
 
 class PhotoDataset(Dataset):
 
-    def __init__(self, path, transform, quantity=-1):
+    def __init__(self, path, transform, quantity=-1, preload=True):
         self.filenames = glob.glob(
             to_absolute_path(os.path.join(path, "*.jpg"))
         )
@@ -30,7 +31,16 @@ class PhotoDataset(Dataset):
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
-        self.files = dict()
+        self.files = [None] * len(self.filenames)
+        if preload:
+            log.info("Preloading data")
+            self.preload()
+            log.info("Data preloaded!")
+
+    def preload(self, num_workers=10):
+        with multiprocessing.Pool(num_workers) as pool:
+            result = pool.map(self.load_image, self.filenames)
+        self.files = result
 
     def load_image(self, filename):
         image = read_image(filename)
@@ -38,15 +48,14 @@ class PhotoDataset(Dataset):
         return self.transform(image)
 
     def get_image_from_filename(self, filename):
-        if filename in self.files.keys():
-            return self.files[filename]
-        else:
-            img = self.load_image(filename)
-            self.files[filename] = img
-            return img
+        return self.get_image_from_idx(self.filenames.index(filename))
 
     def get_image_from_idx(self, idx):
-        return self.get_image_from_filename(self.filenames[idx])
+        img = self.files[idx]
+        if img is None:
+            img = self.load_image(self.filenames[idx])
+            self.files[idx] = img
+        return img
 
     def __len__(self):
         return len(self.filenames)
@@ -68,7 +77,7 @@ class PhotoDataset(Dataset):
     def __getitem__(self, idx):
         if isinstance(idx, int):
             return self.get_image(idx)
-        return torch.stack([self.get_image(i % len(self)) for i in idx])
+        return torch.stack([self.get_image(i) for i in idx])
 
 
 class PaintingsDataset(PhotoDataset):
@@ -91,7 +100,7 @@ class TrainingDataset(Dataset):
     def __getitem__(self, idx):
         return (
             self.content_dataset[np.random.randint(len(self.content_dataset))],
-            self.style_dataset[idx // self.cfg.training.repeat]
+            self.style_dataset[idx % len(self.style_dataset)]
         )
 
 
@@ -129,7 +138,8 @@ class DataManager:
         log.info("Loading real pictures dataset")
         self.content_dataset = PhotoDataset(
             path=self.cfg.data.photo,
-            transform=self.transform
+            transform=self.transform,
+            preload=True
         )
         log.info(
             f"Real pictures dataset has {len(self.content_dataset)} samples"
@@ -139,7 +149,8 @@ class DataManager:
         self.style_dataset = PaintingsDataset(
             path=self.cfg.data.monet,
             transform=self.transform,
-            quantity=self.cfg.data.style_quantity
+            quantity=self.cfg.data.style_quantity,
+            preload=True
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 

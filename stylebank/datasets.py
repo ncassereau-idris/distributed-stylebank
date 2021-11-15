@@ -14,7 +14,6 @@ from PIL import Image
 import numpy as np
 import glob
 import os
-import multiprocessing
 
 
 log = logging.getLogger(__name__)
@@ -31,16 +30,23 @@ class PhotoDataset(Dataset):
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
-        self.files = [None] * len(self.filenames)
         if preload:
             log.info("Preloading data")
-            self.preload()
+            self.files = self.preload()
             log.info("Data preloaded!")
+        else:
+            self.files = [None] * len(self.filenames)
 
-    def preload(self, num_workers=10):
-        with multiprocessing.Pool(num_workers) as pool:
-            result = pool.map(self.load_image, self.filenames)
-        self.files = result
+    def preload(self):
+        files = [torch.zeros((3, 513, 513)) for _ in self.filenames]
+        result = [
+            self.load_image(filename) 
+            for filename in self.filenames[hvd.rank()::hvd.size()]
+        ]
+        files[hvd.rank()::hvd.size()] = result
+        for i in range(len(files)):
+            files[i] = hvd.broadcast(files[i], i % hvd.size())
+        return files
 
     def load_image(self, filename):
         image = read_image(filename)

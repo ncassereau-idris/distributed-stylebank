@@ -69,6 +69,13 @@ class TrainingConf:
 @dataclass
 class VGGConf:
 
+    store: bool = field(default=False, metadata={
+        "help": (
+            "whether or not content losses and style losses should"
+            "store targets for faster feed-forward"
+        )
+    })
+
     content: Dict[str, float] = field(default_factory=dict, metadata={
         "help": (
             "Dictionary where keys refer to VGG layers names to consider "

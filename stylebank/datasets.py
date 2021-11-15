@@ -82,15 +82,8 @@ class PhotoDataset(Dataset):
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
-            return self.get_image(idx)
-        return torch.stack([self.get_image(i) for i in idx])
-
-
-class PaintingsDataset(PhotoDataset):
-
-    def __getitem__(self, idx):
-        # return both the indices and the paintings
-        return idx, super().__getitem__(idx)
+            return idx, self.get_image(idx)
+        return idx, torch.stack([self.get_image(i) for i in idx])
 
 
 class TrainingDataset(Dataset):
@@ -152,7 +145,7 @@ class DataManager:
         )
 
         log.info("Loading monet paintings dataset")
-        self.style_dataset = PaintingsDataset(
+        self.style_dataset = PhotoDataset(
             path=self.cfg.data.monet,
             transform=self.transform,
             quantity=self.cfg.data.style_quantity,

@@ -171,7 +171,7 @@ class Trainer:
             log.info(f"Epoch {epoch} / {self.cfg.training.epochs}")
             self.epoch_beginning = time.perf_counter()
             local_step = 0
-            for content, (style_id, style) in dataloader:
+            for (content_id, content), (style_id, style) in dataloader:
                 step += 1
                 local_step += 1
 
@@ -179,7 +179,7 @@ class Trainer:
                 style = style.cuda()
 
                 if step % T != 0:
-                    self._train_style_bank(content, style_id, style)
+                    self._train_style_bank(content_id, content, style_id, style)
                 else:
                     self._train_auto_encoder(content)
 
@@ -209,12 +209,12 @@ class Trainer:
             f"{self.format_duration(total_duration)})"
         )
 
-    def _train_style_bank(self, content, style_id, style):
+    def _train_style_bank(self, content_id, content, style_id, style):
         self.optimizer.zero_grad()
         output_image = self.network_manager.model(content, style_id)
 
         content_loss, style_loss = self.network_manager.loss_network(
-            output_image, content, style
+            output_image, content, style, content_id, style_id
         )
         content_loss *= self.cfg.training.content_weight
         style_loss *= self.cfg.training.style_weight

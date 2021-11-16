@@ -2,14 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
+from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
 import torchvision.models as models
-import horovod.torch as hvd
 from copy import deepcopy
 from hydra.utils import to_absolute_path
 import os
 import logging
+from . import tools
 
 
 log = logging.getLogger(__name__)
@@ -24,7 +26,9 @@ class Storage:
         if isinstance(ids, int):
             return self._storage[ids]
         else:
-            return torch.stack([self._storage[id.item()] for id in ids]).cuda()
+            return torch.stack([
+                self._storage[id.item()].cuda() for id in ids
+            ])
 
     def __setitem__(self, ids, value):
         assert len(ids) == value.shape[0]
@@ -345,19 +349,20 @@ class NetworkManager:
     def __init__(self, cfg, style_quantity):
         self.cfg = cfg
 
-        self.model = StyleBankNet(style_quantity).cuda()
-        if cfg.data.load_model and hvd.rank() == 0:
+        self.model = DistributedDataParallel(
+            StyleBankNet(style_quantity).cuda(),
+            device_ids=[tools.local_rank],
+            find_unused_parameters=True
+        )
+        if cfg.data.load_model:
             self.load_model()
-
-        hvd.broadcast_parameters(self.model.state_dict(), root_rank=0)
 
         if cfg.training.train:
             cnn = init_vgg(cfg)
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
     def save_models(self):
-        if hvd.rank() != 0:
-            log.info("Not rank 0, model not saved")
+        if tools.rank != 0:
             return
         try:
             os.mkdir(self.cfg.data.weights_subfolder)
@@ -386,11 +391,16 @@ class NetworkManager:
         log.info("Model saved!")
 
     def load_model(self):
+        dist.barrier()
+        if tools.rank != 0:
+            return
         log.info("Loading model...")
-        self.model.load_state_dict(torch.load(to_absolute_path(
-            os.path.join(
+        map_location = {'cuda:%d' % 0: 'cuda:%d' % tools.local_rank}
+        self.model.load_state_dict(torch.load(
+            to_absolute_path(os.path.join(
                 self.cfg.data.folder,
                 self.cfg.data.model_weight_filename
-            )
-        )))
+            )),
+            map_location=map_location
+        ))
         log.info("Model loaded!")

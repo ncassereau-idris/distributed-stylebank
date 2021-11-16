@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import torch
+import torch.distributed as dist
 import torch.optim as optim
-import horovod.torch as hvd
 from dataclasses import dataclass
 import logging
 import time
 import functools
-from .tools import format_duration
+from . import tools
 
 
 log = logging.getLogger(__name__)
@@ -124,25 +124,21 @@ class Trainer:
         self.data_manager = data_manager
         self.network_manager = network_manager
 
-        self.optimizer = hvd.DistributedOptimizer(
-            optim.Adam(self.network_manager.model.parameters()),
-            named_parameters=self.network_manager.model.named_parameters()
-        )
+        self.optimizer = optim.Adam(self.network_manager.model.parameters())
 
-        hvd.broadcast_optimizer_state(self.optimizer, root_rank=0)
-
-        self.effective_batch_size = cfg.training.batch_size * hvd.size()
+        self.effective_batch_size = cfg.training.batch_size * tools.size
         self.training_data = TrainingData()
 
     def adjust_learning_rate(self, step):
-        lr = self.cfg.training.learning_rate * hvd.size()
+        lr = self.cfg.training.learning_rate * tools.size
         lr = max(lr * (0.8 ** (step)), 1e-6)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         return lr
 
     def synchronise_data(self):
-        data = hvd.allgather_object(self.training_data)
+        data = [None] * tools.size
+        dist.all_gather_object(data, self.training_data)
         self.training_data = functools.reduce(TrainingData.__iadd__, data)
 
     def log(self, epoch, step, steps_per_epoch):
@@ -154,8 +150,8 @@ class Trainer:
             f"Step {step} / {steps_per_epoch} | " +
             self.training_data.log() +
             f" | Batch size: {self.effective_batch_size}" +
-            f" | Wall (epoch): {format_duration(duration_epoch)}" +
-            f" | Wall (training): {format_duration(duration_training)}"
+            f" | Wall (epoch): {tools.format_duration(duration_epoch)}" +
+            f" | Wall (training): {tools.format_duration(duration_training)}"
         )
 
     def log_epoch(self, epoch):
@@ -166,8 +162,8 @@ class Trainer:
             f"Epoch {epoch} / {self.cfg.training.epochs} | " +
             self.training_data.log_epoch() +
             f" | Batch size: {self.effective_batch_size}" +
-            f" | Wall (epoch): {format_duration(duration_epoch)}" +
-            f" | Wall (training): {format_duration(duration_training)}"
+            f" | Wall (epoch): {tools.format_duration(duration_epoch)}" +
+            f" | Wall (training): {tools.format_duration(duration_training)}"
         )
 
     def train(self):
@@ -218,7 +214,7 @@ class Trainer:
         total_duration = self.current_time - self.train_beginning
         log.info(
             "End of training (Total duration: "
-            f"{format_duration(total_duration)})"
+            f"{tools.format_duration(total_duration)})"
         )
 
     def _train_style_bank(self, content_id, content, style_id, style):

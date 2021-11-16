@@ -4,16 +4,17 @@
 import logging
 from hydra.utils import to_absolute_path
 import torch
+import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import torchvision.transforms.functional as TF
 from torchvision.io import read_image
 import torchvision.transforms as transforms
-import horovod.torch as hvd
 from PIL import Image
 import numpy as np
 import glob
 import os
+from . import tools
 
 
 log = logging.getLogger(__name__)
@@ -22,30 +23,44 @@ log = logging.getLogger(__name__)
 class PhotoDataset(Dataset):
 
     def __init__(self, path, transform, quantity=-1, preload=True):
+        # quantity = 300
         self.filenames = glob.glob(
             to_absolute_path(os.path.join(path, "*.jpg"))
         )
         self.filenames.sort()
-        if quantity > 0:
+        if 0 < quantity <= len(self.filenames):
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
         if preload:
-            log.info("Preloading data")
+            log.info(f"Preloading data ({len(self.filenames)} files)")
             self.files = self.preload()
-            log.info("Data preloaded!")
+            log.info(f"{len(self.filenames)} files have been preloaded!")
         else:
             self.files = [None] * len(self.filenames)
 
     def preload(self):
-        files = [torch.zeros((3, 513, 513)) for _ in self.filenames]
-        result = [
-            self.load_image(filename) 
-            for filename in self.filenames[hvd.rank()::hvd.size()]
+        # result = [
+        #     self.load_image(filename) 
+        #     for filename in self.filenames[tools.rank::tools.size]
+        # ]
+        # shape = result[0].shape
+        # files = [torch.zeros(shape) for _ in self.filenames]
+        # files[tools.rank::tools.size] = result
+
+        # dist.barrier()
+        # log.info("Broadcasting computed data")
+
+        # for i in range(len(files)):
+        #     files[i] = files[i].cuda()
+        #     dist.broadcast(files[i], i % tools.size)
+        #     files[i] = files[i].cpu()
+        # return files
+        files = [
+            self.load_image(filename)
+            for filename in self.filenames
         ]
-        files[hvd.rank()::hvd.size()] = result
-        for i in range(len(files)):
-            files[i] = hvd.broadcast(files[i], i % hvd.size())
+        dist.barrier()
         return files
 
     def load_image(self, filename):
@@ -159,13 +174,12 @@ class DataManager:
         )
         self.training_sampler = DistributedSampler(
             self.training_dataset,
-            num_replicas=hvd.size(),
-            rank=hvd.rank(),
+            num_replicas=tools.size,
+            rank=tools.rank,
             shuffle=True
         )
         self.training_dataloader = DataLoader(
             self.training_dataset,
             batch_size=self.cfg.training.batch_size,
-            sampler=self.training_sampler,
-            num_workers=10
+            sampler=self.training_sampler
         )

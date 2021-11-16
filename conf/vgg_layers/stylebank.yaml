@@ -1,7 +1,7 @@
 defaults:
     - base_vgg_conf
 
-store: True
+store: False
 content:
     conv_9: 1
 style:

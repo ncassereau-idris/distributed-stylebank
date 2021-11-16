@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import logging
 import time
 import functools
-from datetime import timedelta
+from .tools import format_duration
 
 
 log = logging.getLogger(__name__)
@@ -141,9 +141,6 @@ class Trainer:
             param_group['lr'] = lr
         return lr
 
-    def format_duration(self, seconds):
-        return str(timedelta(seconds=int(seconds)))
-
     def synchronise_data(self):
         data = hvd.allgather_object(self.training_data)
         self.training_data = functools.reduce(TrainingData.__iadd__, data)
@@ -157,8 +154,8 @@ class Trainer:
             f"Step {step} / {steps_per_epoch} | " +
             self.training_data.log() +
             f" | Batch size: {self.effective_batch_size}" +
-            f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
-            f" | Wall (training): {self.format_duration(duration_training)}"
+            f" | Wall (epoch): {format_duration(duration_epoch)}" +
+            f" | Wall (training): {format_duration(duration_training)}"
         )
 
     def log_epoch(self, epoch):
@@ -169,8 +166,8 @@ class Trainer:
             f"Epoch {epoch} / {self.cfg.training.epochs} | " +
             self.training_data.log_epoch() +
             f" | Batch size: {self.effective_batch_size}" +
-            f" | Wall (epoch): {self.format_duration(duration_epoch)}" +
-            f" | Wall (training): {self.format_duration(duration_training)}"
+            f" | Wall (epoch): {format_duration(duration_epoch)}" +
+            f" | Wall (training): {format_duration(duration_training)}"
         )
 
     def train(self):
@@ -221,7 +218,7 @@ class Trainer:
         total_duration = self.current_time - self.train_beginning
         log.info(
             "End of training (Total duration: "
-            f"{self.format_duration(total_duration)})"
+            f"{format_duration(total_duration)})"
         )
 
     def _train_style_bank(self, content_id, content, style_id, style):

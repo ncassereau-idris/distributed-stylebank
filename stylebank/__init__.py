@@ -6,6 +6,7 @@ from . import datasets
 from . import launcher
 from . import networks
 from . import trainer
+from . import tools
 
 from .dataclasses import (
     Configuration,
@@ -19,7 +20,7 @@ from .networks import NetworkManager
 from .trainer import Trainer
 
 __all__ = [
-    "dataclasses", "datasets", "launcher", "networks", "trainer",
+    "dataclasses", "datasets", "launcher", "networks", "trainer", "tools",
     "Configuration", "TrainingConf", "VGGConf", "DataConf",
     "DataManager", "init", "launch", "NetworkManager", "Trainer"
 ]

@@ -24,13 +24,13 @@ class Storage:
         if isinstance(ids, int):
             return self._storage[ids]
         else:
-            return torch.stack([self._storage[id.item()] for id in ids])
+            return torch.stack([self._storage[id.item()] for id in ids]).cuda()
 
     def __setitem__(self, ids, value):
         assert len(ids) == value.shape[0]
         chunks = torch.unbind(value, dim=0)
         for i in range(len(ids)):
-            self._storage[ids[i].item()] = chunks[i]
+            self._storage[ids[i].item()] = chunks[i].cpu()
 
 
 class ContentLoss(nn.Module):

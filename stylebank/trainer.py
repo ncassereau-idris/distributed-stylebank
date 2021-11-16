@@ -7,6 +7,7 @@ import horovod.torch as hvd
 from dataclasses import dataclass
 import logging
 import time
+import functools
 from datetime import timedelta
 
 
@@ -92,7 +93,7 @@ class TrainingData:
             f"Content loss: {self.content_loss:.6f}",
             f"Style loss: {self.style_loss:.6f}",
             f"Regularizer loss: {self.regularizer_loss:.6f}",
-            f"Reconstruction loss: {self.reconstruction_loss:.6f}",
+            f"Reconstruction loss: {self.reconstruction_loss:.6f}"
         ]
         return " | ".join(losses)
 
@@ -105,6 +106,14 @@ class TrainingData:
             f"Reconstruction loss: {str(self.epoch_reconstruction_loss)}",
         ]
         return " | ".join(losses)
+
+    def __iadd__(self, other):
+        self.style_loss += other.style_loss
+        self.content_loss += other.content_loss
+        self.total_loss += other.total_loss
+        self.reconstruction_loss += other.reconstruction_loss
+        self.regularizer_loss += other.regularizer_loss
+        return self
 
 
 class Trainer:
@@ -135,7 +144,12 @@ class Trainer:
     def format_duration(self, seconds):
         return str(timedelta(seconds=int(seconds)))
 
+    def synchronise_data(self):
+        data = hvd.allgather_object(self.training_data)
+        self.training_data = functools.reduce(TrainingData.__iadd__, data)
+
     def log(self, epoch, step, steps_per_epoch):
+        self.synchronise_data()
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
         log.info(
@@ -148,6 +162,7 @@ class Trainer:
         )
 
     def log_epoch(self, epoch):
+        self.synchronise_data()
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
         log.info(

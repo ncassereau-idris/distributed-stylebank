@@ -15,6 +15,7 @@ import numpy as np
 import glob
 import os
 from . import tools
+from .plasma import PlasmaStorage
 
 
 log = logging.getLogger(__name__)
@@ -22,8 +23,13 @@ log = logging.getLogger(__name__)
 
 class PhotoDataset(Dataset):
 
-    def __init__(self, path, transform, quantity=-1, preload=True):
+    def __init__(
+        self, path, transform, quantity=-1,
+        store_transformed=False, preload=False
+    ):
         # quantity = 300
+        assert store_transformed or not preload
+        self.store_transformed = store_transformed
         self.filenames = glob.glob(
             to_absolute_path(os.path.join(path, "*.jpg"))
         )
@@ -32,36 +38,24 @@ class PhotoDataset(Dataset):
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
+
         if preload:
             log.info(f"Preloading data ({len(self.filenames)} files)")
             self.files = self.preload()
             log.info(f"{len(self.filenames)} files have been preloaded!")
         else:
-            self.files = [None] * len(self.filenames)
+            self.files = PlasmaStorage()
 
     def preload(self):
-        # result = [
-        #     self.load_image(filename) 
-        #     for filename in self.filenames[tools.rank::tools.size]
-        # ]
-        # shape = result[0].shape
-        # files = [torch.zeros(shape) for _ in self.filenames]
-        # files[tools.rank::tools.size] = result
-
-        # dist.barrier()
-        # log.info("Broadcasting computed data")
-
-        # for i in range(len(files)):
-        #     files[i] = files[i].cuda()
-        #     dist.broadcast(files[i], i % tools.size)
-        #     files[i] = files[i].cpu()
-        # return files
-        files = [
-            self.load_image(filename)
-            for filename in self.filenames
-        ]
+        files = PlasmaStorage()
+        for i, filename in enumerate(self.filenames):
+            if (i - tools.rank) % tools.size == 0:
+                files[i] = self.load_image(filename)
         dist.barrier()
-        return files
+
+        # pooling across all tasks
+        return files.merge()
+
 
     def load_image(self, filename):
         image = read_image(filename)
@@ -75,7 +69,8 @@ class PhotoDataset(Dataset):
         img = self.files[idx]
         if img is None:
             img = self.load_image(self.filenames[idx])
-            self.files[idx] = img
+            if self.store_transformed:
+                self.files[idx] = img
         return img
 
     def __len__(self):
@@ -153,7 +148,8 @@ class DataManager:
         self.content_dataset = PhotoDataset(
             path=self.cfg.data.photo,
             transform=self.transform,
-            preload=True
+            store_transformed=self.cfg.data.store_transformed,
+            preload=self.cfg.data.preload_transformed
         )
         log.info(
             f"Real pictures dataset has {len(self.content_dataset)} samples"
@@ -164,7 +160,8 @@ class DataManager:
             path=self.cfg.data.monet,
             transform=self.transform,
             quantity=self.cfg.data.style_quantity,
-            preload=True
+            store_transformed=self.cfg.data.store_transformed,
+            preload=self.cfg.data.preload_transformed
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
@@ -183,3 +180,26 @@ class DataManager:
             batch_size=self.cfg.training.batch_size,
             sampler=self.training_sampler
         )
+
+    def make_preload_dataloaders(self):
+        content_sampler = DistributedSampler(
+            self.content_dataset,
+            num_replicas=tools.size,
+            rank=tools.rank
+        )
+        content_dataloader = DataLoader(
+            self.content_dataset,
+            batch_size=self.cfg.training.batch_size,
+            sampler=content_sampler
+        )
+        style_sampler = DistributedSampler(
+            self.style_dataset,
+            num_replicas=tools.size,
+            rank=tools.rank
+        )
+        style_dataloader = DataLoader(
+            self.style_dataset,
+            batch_size=self.cfg.training.batch_size,
+            sampler=style_sampler
+        )
+        return content_dataloader, style_dataloader

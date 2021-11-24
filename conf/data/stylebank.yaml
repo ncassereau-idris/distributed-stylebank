@@ -7,6 +7,9 @@ monet: "${data.folder}/monet_jpg"
 style_quantity: -1
 photo: "${data.folder}/photo_jpg"
 
+store_transformed: True
+preload_transformed: True
+
 load_model: False
 weights_subfolder: weights
 bank_weight_filename: "${data.weights_subfolder}/bank_{0}.pth"

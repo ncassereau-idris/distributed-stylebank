@@ -3,6 +3,7 @@
 
 from datetime import timedelta
 import os
+from pathlib import Path
 import hostlist
 
 # from http://www.idris.fr/jean-zay/gpu/jean-zay-gpu-torch-multi.html
@@ -24,6 +25,8 @@ os.environ['MASTER_ADDR'] = hostnames[0]
 
 # to avoid port conflict on the same node
 os.environ['MASTER_PORT'] = str(16785 + int(min(gpu_ids)))
+
+# LOCKFILE = "/tmp/monet.lock"
 
 def format_duration(seconds):
     return str(timedelta(seconds=int(seconds)))

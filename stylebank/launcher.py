@@ -6,6 +6,9 @@ import torch
 import torch.distributed as dist
 import logging
 import numpy as np
+import subprocess
+import os
+from pyarrow import plasma
 from .datasets import DataManager
 from .networks import NetworkManager
 from .trainer import Trainer
@@ -13,6 +16,7 @@ from . import tools
 
 
 log = logging.getLogger(__name__)
+server = None
 
 
 class Rank0Filter(logging.Filter):
@@ -33,7 +37,7 @@ def init(cfg):
     for handler in logging.root.handlers:
         handler.addFilter(Rank0Filter())
 
-    log.info("\n" + OmegaConf.to_yaml(cfg) + "\n")
+    log.info("\n" + OmegaConf.to_yaml(cfg))
 
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -44,6 +48,14 @@ def init(cfg):
 
     log.info(f"Torch initialized | World size: {tools.size}")
 
+    global server
+    if tools.rank == 0:
+        GB100 = 100 * (1024 ** 3)
+        server = subprocess.Popen(
+            ["plasma_store", "-m", str(GB100), "-s", "/tmp/plasma"]
+        )
+    log.info(f"Plasma store initialized")
+
 
 def launch(cfg):
     data_manager = DataManager(cfg)
@@ -51,3 +63,10 @@ def launch(cfg):
 
     if cfg.training.train:
         Trainer(cfg, data_manager, network_manager).train()
+
+
+def cleanup(cfg):
+    global server
+    # assert (tools.rank == 0) == (server is not None)
+    if server is not None:
+        server.kill()

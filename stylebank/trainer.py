@@ -1,7 +1,6 @@
 # /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import torch
 import torch.optim as optim
 import logging
 import time
@@ -86,7 +85,9 @@ class Trainer:
                 style_id = [idx.item() for idx in style_id]
 
                 if step % T != 0:
-                    self._train_style_bank(content_id, content, style_id, style)
+                    self._train_style_bank(
+                        content_id, content, style_id, style
+                    )
                 else:
                     self._train_auto_encoder(content)
 

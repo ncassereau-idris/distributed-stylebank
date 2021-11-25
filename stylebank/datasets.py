@@ -56,7 +56,6 @@ class PhotoDataset(Dataset):
         # pooling across all tasks
         return files.merge()
 
-
     def load_image(self, filename):
         image = read_image(filename)
         image = TF.to_pil_image(image)

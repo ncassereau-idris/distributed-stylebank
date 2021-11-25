@@ -219,7 +219,7 @@ class LossNetwork(nn.Module):
             sl.mode = 'loss'
             sl.target_ids = style_ids
         self.model(input)
-    
+
         content_loss = sum([cl.loss for cl in self.content_losses])
         style_loss = sum([sl.loss for sl in self.style_losses])
         return content_loss, style_loss

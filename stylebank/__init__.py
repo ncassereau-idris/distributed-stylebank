@@ -22,7 +22,9 @@ from .plasma import PlasmaStorage
 from .trainer import Trainer
 
 __all__ = [
-    "dataclasses", "datasets", "launcher", "networks", "trainer", "tools",
-    "Configuration", "TrainingConf", "VGGConf", "DataConf", "PlasmaStorage",
-    "DataManager", "init", "launch", "cleanup", "NetworkManager", "Trainer"
+    "dataclasses", "datasets", "launcher", "networks",
+    "trainer", "tools", "plasma",
+    "Configuration", "TrainingConf", "VGGConf", "DataConf",
+    "NetworkManager", "DataManager", "PlasmaStorage", "Trainer",
+    "init", "launch", "cleanup"
 ]

@@ -27,7 +27,7 @@ class Rank0Filter(logging.Filter):
 def init(cfg):
     dist.init_process_group(
         backend='nccl',
-        world_size=tools.size, 
+        world_size=tools.size,
         rank=tools.rank
     )
 
@@ -46,7 +46,7 @@ def init(cfg):
     log.info(f"Torch initialized | World size: {tools.size}")
 
     plasma.plasma_server.connect()
-    log.info(f"Plasma store initialized")
+    log.info("Plasma store initialized")
 
 
 def launch(cfg):

@@ -4,8 +4,11 @@ defaults:
 folder: data
 vgg_file: "${data.folder}/vgg16-397923af.pth"
 monet: "${data.folder}/monet_jpg"
-style_quantity: 10
+style_quantity: -1
 photo: "${data.folder}/photo_jpg"
+
+store_transformed: True
+preload_transformed: True
 
 load_model: False
 weights_subfolder: weights

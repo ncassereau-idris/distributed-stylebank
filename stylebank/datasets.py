@@ -4,16 +4,18 @@
 import logging
 from hydra.utils import to_absolute_path
 import torch
+import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import torchvision.transforms.functional as TF
 from torchvision.io import read_image
 import torchvision.transforms as transforms
-import horovod.torch as hvd
 from PIL import Image
 import numpy as np
 import glob
 import os
+from . import tools
+from .plasma import PlasmaStorage
 
 
 log = logging.getLogger(__name__)
@@ -21,16 +23,38 @@ log = logging.getLogger(__name__)
 
 class PhotoDataset(Dataset):
 
-    def __init__(self, path, transform, quantity=-1):
+    def __init__(
+        self, path, transform, quantity=-1,
+        store_transformed=False, preload=False
+    ):
+        # quantity = 300
+        assert store_transformed or not preload
+        self.store_transformed = store_transformed
         self.filenames = glob.glob(
             to_absolute_path(os.path.join(path, "*.jpg"))
         )
         self.filenames.sort()
-        if quantity > -1:
+        if 0 < quantity <= len(self.filenames):
             self.filenames = self.filenames[:quantity]
 
         self.transform = transform
-        self.files = dict()
+
+        if preload:
+            log.info(f"Preloading data ({len(self.filenames)} files)")
+            self.files = self.preload()
+            log.info(f"{len(self.filenames)} files have been preloaded!")
+        else:
+            self.files = PlasmaStorage(autocuda=True)
+
+    def preload(self):
+        files = PlasmaStorage(autocuda=True)
+        for i, filename in enumerate(self.filenames):
+            if (i - tools.rank) % tools.size == 0:
+                files[i] = self.load_image(filename)
+        dist.barrier()
+
+        # pooling across all tasks
+        return files.merge()
 
     def load_image(self, filename):
         image = read_image(filename)
@@ -38,15 +62,15 @@ class PhotoDataset(Dataset):
         return self.transform(image)
 
     def get_image_from_filename(self, filename):
-        if filename in self.files.keys():
-            return self.files[filename]
-        else:
-            img = self.load_image(filename)
-            self.files[filename] = img
-            return img
+        return self.get_image_from_idx(self.filenames.index(filename))
 
     def get_image_from_idx(self, idx):
-        return self.get_image_from_filename(self.filenames[idx])
+        img = self.files[idx]
+        if img is None:
+            img = self.load_image(self.filenames[idx])
+            if self.store_transformed:
+                self.files[idx] = img
+        return img
 
     def __len__(self):
         return len(self.filenames)
@@ -67,15 +91,8 @@ class PhotoDataset(Dataset):
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
-            return self.get_image(idx)
-        return torch.stack([self.get_image(i % len(self)) for i in idx])
-
-
-class PaintingsDataset(PhotoDataset):
-
-    def __getitem__(self, idx):
-        # return both the indices and the paintings
-        return idx, super().__getitem__(idx)
+            return idx, self.get_image(idx)
+        return idx, torch.stack([self.get_image(i) for i in idx])
 
 
 class TrainingDataset(Dataset):
@@ -91,7 +108,7 @@ class TrainingDataset(Dataset):
     def __getitem__(self, idx):
         return (
             self.content_dataset[np.random.randint(len(self.content_dataset))],
-            self.style_dataset[idx // self.cfg.training.repeat]
+            self.style_dataset[idx % len(self.style_dataset)]
         )
 
 
@@ -129,17 +146,21 @@ class DataManager:
         log.info("Loading real pictures dataset")
         self.content_dataset = PhotoDataset(
             path=self.cfg.data.photo,
-            transform=self.transform
+            transform=self.transform,
+            store_transformed=self.cfg.data.store_transformed,
+            preload=self.cfg.data.preload_transformed
         )
         log.info(
             f"Real pictures dataset has {len(self.content_dataset)} samples"
         )
 
         log.info("Loading monet paintings dataset")
-        self.style_dataset = PaintingsDataset(
+        self.style_dataset = PhotoDataset(
             path=self.cfg.data.monet,
             transform=self.transform,
-            quantity=self.cfg.data.style_quantity
+            quantity=self.cfg.data.style_quantity,
+            store_transformed=self.cfg.data.store_transformed,
+            preload=self.cfg.data.preload_transformed
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
@@ -149,13 +170,35 @@ class DataManager:
         )
         self.training_sampler = DistributedSampler(
             self.training_dataset,
-            num_replicas=hvd.size(),
-            rank=hvd.rank(),
+            num_replicas=tools.size,
+            rank=tools.rank,
             shuffle=True
         )
         self.training_dataloader = DataLoader(
             self.training_dataset,
             batch_size=self.cfg.training.batch_size,
-            sampler=self.training_sampler,
-            num_workers=10
+            sampler=self.training_sampler
         )
+
+    def make_preload_dataloaders(self):
+        content_sampler = DistributedSampler(
+            self.content_dataset,
+            num_replicas=tools.size,
+            rank=tools.rank
+        )
+        content_dataloader = DataLoader(
+            self.content_dataset,
+            batch_size=self.cfg.training.batch_size,
+            sampler=content_sampler
+        )
+        style_sampler = DistributedSampler(
+            self.style_dataset,
+            num_replicas=tools.size,
+            rank=tools.rank
+        )
+        style_dataloader = DataLoader(
+            self.style_dataset,
+            batch_size=self.cfg.training.batch_size,
+            sampler=style_sampler
+        )
+        return content_dataloader, style_dataloader

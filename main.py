@@ -6,6 +6,7 @@ from hydra.core.config_store import ConfigStore
 from stylebank import (
     init,
     launch,
+    cleanup,
     Configuration,
     TrainingConf,
     VGGConf,
@@ -24,6 +25,7 @@ cs.store(group="data", name="base_data_conf", node=DataConf)
 def main(cfg: Configuration) -> None:
     init(cfg)
     launch(cfg)
+    cleanup(cfg)
 
 
 if __name__ == "__main__":

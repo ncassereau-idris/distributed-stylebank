@@ -7,28 +7,38 @@ import pyarrow as pa
 from pyarrow import plasma
 import torch.distributed as dist
 import functools
-import os
-import fcntl
+import subprocess
 from . import tools
 
 
-class Lock:
+class PlasmaServer:
 
     def __init__(self):
-        self.LOCKFILE = "/tmp/monet.lock"
-        os.system(f"touch {self.LOCKFILE}")
+        self._server = None
+        self._client = None
 
-    def __enter__ (self):
-        self.fp = open(self.LOCKFILE)
-        fcntl.flock(self.fp.fileno(), fcntl.LOCK_EX)
+    def connect(self):
+        if tools.rank == 0:
+            GB200 = 200 * (1024 ** 3)
+            self._server = subprocess.Popen([
+                "plasma_store", "-m", str(GB200), "-s", "/tmp/plasma"
+            ])
 
-    def __exit__ (self, type, value, traceback):
-        fcntl.flock(self.fp.fileno(), fcntl.LOCK_UN)
-        self.fp.close()
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = plasma.connect("/tmp/plasma", num_retries=200)
+        return self._client
+
+    def kill(self):
+        if self._client is not None:
+            self._client.disconnect()
+        if self._server is not None:
+            assert tools.rank == 0
+            self._server.kill()
 
 
-lock = Lock()
-client = None
+plasma_server = PlasmaServer()
 
 
 class AbstractStorage:
@@ -64,12 +74,10 @@ class AbstractStorage:
 
         if isinstance(ids, (list, tuple, torch.Tensor)):
             chunks = torch.unbind(value, dim=0)
-            with lock:
-                for i in range(len(ids)):
-                    self._register(ids[i], chunks[i])
+            for i in range(len(ids)):
+                self._register(ids[i], chunks[i])
         else:
-            with lock:
-                self._register(ids, value)
+            self._register(ids, value)
 
     def merge(self):
         storages_list = [None] * tools.size
@@ -103,10 +111,7 @@ class PlasmaStorage(AbstractStorage):
 
     @property
     def client(self):
-        global client
-        if client is None:
-            client = plasma.connect("/tmp/plasma", num_retries=200)
-        return client
+        return plasma_server.client
 
     def _retrieve(self, idx):
         if isinstance(idx, torch.Tensor):

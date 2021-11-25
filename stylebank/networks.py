@@ -52,17 +52,10 @@ class ContentLoss(nn.Module):
 
 
 def gram_matrix(input):
-    a, b, c, d = input.size()  # a=batch size(=1)
-    # b=number of feature maps
-    # (c,d)=dimensions of a f. map (N=c*d)
-
-    features = input.view(a * b, c * d)  # resize F_XL into \hat F_XL
-
-    G = features @ features.T  # compute the gram product
-
-    # we 'normalize' the values of the gram matrix
-    # by dividing by the number of element in each feature maps.
-    return G.div(a * b * c * d)
+    bsz, channels, h, w = input.size()
+    features = input.view(bsz, channels, h * w)
+    G = features @ torch.transpose(features, 1, 2)
+    return G.div(channels * h * w)
 
 
 class StyleLoss(nn.Module):
@@ -84,15 +77,15 @@ class StyleLoss(nn.Module):
             if (not self.store) or self.target_ids is None:
                 self.loss = self.weight * F.mse_loss(G, self.target)
             else:
-                G_target = gram_matrix(self.storage[self.target_ids])
+                G_target = self.storage[self.target_ids]
                 self.loss = self.weight * F.mse_loss(
                     G, G_target
                 )
         elif self.mode == 'learn':
+            G = gram_matrix(input)
             if self.store and self.target_ids is not None:
-                self.storage[self.target_ids] = input.detach()
+                self.storage[self.target_ids] = G.detach()
             else:
-                G = gram_matrix(input)
                 self.target = G.detach()
         return input
 
@@ -221,8 +214,10 @@ class LossNetwork(nn.Module):
 
         for cl in self.content_losses:
             cl.mode = 'loss'
+            cl.target_ids = content_ids
         for sl in self.style_losses:
             sl.mode = 'loss'
+            sl.target_ids = style_ids
         self.model(input)
     
         content_loss = sum([cl.loss for cl in self.content_losses])
@@ -256,11 +251,9 @@ class LossNetwork(nn.Module):
 
     def preload(self, content_dataloader, style_dataloader):
         for content_ids, content in content_dataloader:
-            content = content.cuda()
             self.learn_content(content, content_ids)
         dist.barrier()
         for style_ids, style in style_dataloader:
-            style = style.cuda()
             self.learn_style(style, style_ids)
 
         for cl in self.content_losses:

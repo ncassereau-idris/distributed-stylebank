@@ -44,10 +44,10 @@ class PhotoDataset(Dataset):
             self.files = self.preload()
             log.info(f"{len(self.filenames)} files have been preloaded!")
         else:
-            self.files = PlasmaStorage()
+            self.files = PlasmaStorage(autocuda=True)
 
     def preload(self):
-        files = PlasmaStorage()
+        files = PlasmaStorage(autocuda=True)
         for i, filename in enumerate(self.filenames):
             if (i - tools.rank) % tools.size == 0:
                 files[i] = self.load_image(filename)

@@ -82,8 +82,8 @@ class Trainer:
                 step += 1
                 local_step += 1
 
-                content = content.cuda()
-                style = style.cuda()
+                content_id = [idx.item() for idx in content_id]
+                style_id = [idx.item() for idx in style_id]
 
                 if step % T != 0:
                     self._train_style_bank(content_id, content, style_id, style)

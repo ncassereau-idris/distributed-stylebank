@@ -39,12 +39,12 @@ class ContentLoss(nn.Module):
 
     def forward(self, input):
         if self.mode == 'loss':
-            if (not self.store) or self.target_ids is None:
-                self.loss = self.weight * F.mse_loss(input, self.target)
-            else:
-                self.loss = self.weight * F.mse_loss(
-                    input, self.storage[self.target_ids]
-                )
+            target = (
+                self.storage[self.target_ids]
+                if self.store and self.target_ids is not None
+                else self.target
+            )
+            self.loss = self.weight * F.mse_loss(input, target)
         elif self.mode == 'learn':
             self.target = input.detach()
             if self.store and self.target_ids is not None:
@@ -75,13 +75,12 @@ class StyleLoss(nn.Module):
     def forward(self, input):
         if self.mode == 'loss':
             G = gram_matrix(input)
-            if (not self.store) or self.target_ids is None:
-                self.loss = self.weight * F.mse_loss(G, self.target)
-            else:
-                G_target = self.storage[self.target_ids]
-                self.loss = self.weight * F.mse_loss(
-                    G, G_target
-                )
+            G_target = (
+                self.storage[self.target_ids]
+                if self.store and self.target_ids is not None
+                else self.target
+            )
+            self.loss = self.weight * F.mse_loss(G, G_target)
         elif self.mode == 'learn':
             G = gram_matrix(input)
             if self.store and self.target_ids is not None:

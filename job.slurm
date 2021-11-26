@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --time=00:10:00
-# #SBATCH -C v100-32g
+#SBATCH -C v100-32g
 #SBATCH --gres=gpu:4
 #SBATCH --account=sos@gpu
 #SBATCH --qos=qos_gpu-dev

@@ -12,7 +12,7 @@ preload_transformed: True
 
 load_model: False
 weights_subfolder: weights
-bank_weight_filename: "${data.weights_subfolder}/bank_{0}.pth"
-model_weight_filename: "${data.weights_subfolder}/model.pth"
-encoder_weight_filename: "${data.weights_subfolder}/encoder.pth"
-decoder_weight_filename: "${data.weights_subfolder}/decoder.pth"
+bank_weight_filename: "bank_{0}.pth"
+model_weight_filename: "model.pth"
+encoder_weight_filename: "encoder.pth"
+decoder_weight_filename: "decoder.pth"

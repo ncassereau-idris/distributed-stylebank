@@ -60,10 +60,6 @@ class TrainingConf:
         "help": "Trainer will log every n steps"
     })
 
-    save_interval: int = field(default=1000, metadata={
-        "help": "Trainer will save model every n steps"
-    })
-
     adjust_learning_rate_interval: int = field(default=1000, metadata={
         "help": "Trainer will decay learning rate every n steps"
     })

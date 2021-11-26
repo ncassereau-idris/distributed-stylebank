@@ -97,9 +97,6 @@ class Trainer:
                     self.log(epoch, local_step, len(dataloader))
                     self.training_data.reset()
 
-                if step % self.cfg.training.save_interval == 0:
-                    self.network_manager.save_models()
-
                 if step % self.cfg.training.adjust_learning_rate_interval == 0:
                     lr_step = (
                         step /
@@ -109,6 +106,7 @@ class Trainer:
                     log.info(f"Learning rate decay: {new_lr:.6f}")
 
             self.log_epoch(epoch)
+            self.network_manager.save_models(epoch, self.training_data)
             self.training_data.reset(reset_epoch_average=True)
 
         total_duration = self.current_time - self.train_beginning

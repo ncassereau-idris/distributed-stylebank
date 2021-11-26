@@ -3,8 +3,9 @@
 
 from datetime import timedelta
 import os
-# from pathlib import Path
+from pathlib import Path
 import hostlist
+import logging
 
 # from http://www.idris.fr/jean-zay/gpu/jean-zay-gpu-torch-multi.html
 
@@ -30,5 +31,20 @@ os.environ['MASTER_PORT'] = str(16785 + int(min(gpu_ids)))
 # tmpdir = Path(os.environ["JOBSCRATCH"])
 
 
+log = logging.getLogger(__name__)
+
+
 def format_duration(seconds):
     return str(timedelta(seconds=int(seconds)))
+
+
+def mkdir(*args):
+    path = os.path.join(*args)
+    try:
+        os.makedirs(path)
+    except FileExistsError:  # folder already exists
+        pass
+    else:
+        log.info("Created a weights subfolder to store model weights")
+    finally:
+        return Path(path)

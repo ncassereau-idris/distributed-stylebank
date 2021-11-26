@@ -11,6 +11,7 @@ from copy import deepcopy
 from hydra.utils import to_absolute_path
 import os
 import logging
+import pickle
 from . import tools
 from .plasma import PlasmaStorage
 
@@ -367,44 +368,56 @@ class NetworkManager:
             cnn = init_vgg(cfg)
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
-    def save_models(self):
+    def save_models(self, epoch, training_data):
         if tools.rank != 0:
             return
-        try:
-            os.mkdir(self.cfg.data.weights_subfolder)
-        except FileExistsError:  # folder already exists
-            pass
-        else:
-            log.info("Created a weights subfolder to store model weights")
+        path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
         log.info("Storing model weights...")
+
         torch.save(
             self.model.module.state_dict(),
-            self.cfg.data.model_weight_filename
+            path / self.cfg.data.model_weight_filename
         )
         torch.save(
             self.model.module.encoder_net.state_dict(),
-            self.cfg.data.encoder_weight_filename
+            path / self.cfg.data.encoder_weight_filename
         )
         torch.save(
             self.model.module.decoder_net.state_dict(),
-            self.cfg.data.decoder_weight_filename
+            path / self.cfg.data.decoder_weight_filename
         )
         for i in range(len(self.model.module.style_bank)):
             torch.save(
                 self.model.module.style_bank[i].state_dict(),
-                self.cfg.data.bank_weight_filename.format(i)
+                path / self.cfg.data.bank_weight_filename.format(i)
             )
+
+        losses_file = os.path.join(self.cfg.data.weights_subfolder, "losses")
+        if os.path.exists(losses_file):
+            with open(losses_file, "rb") as file_:
+                D = pickle.load(file_)
+        else:
+            D = list()
+        D.append({
+            "Total loss": training_data.epoch_total_loss,
+            "Content loss": training_data.epoch_content_loss,
+            "Style loss": training_data.epoch_style_loss,
+            "Regularizer loss": training_data.epoch_regularizer_loss,
+            "Reconstruction loss": training_data.epoch_reconstruction_loss
+        })
+        with open(losses_file, "wb") as file_:
+            pickle.dump(D, file_)
+
         log.info("Model saved!")
 
     def load_model(self):
         dist.barrier()
-        if tools.rank != 0:
-            return
         log.info("Loading model...")
         map_location = {'cuda:%d' % 0: 'cuda:%d' % tools.local_rank}
         self.model.load_state_dict(torch.load(
             to_absolute_path(os.path.join(
                 self.cfg.data.folder,
+                self.cfg.data.weights_subfolder,
                 self.cfg.data.model_weight_filename
             )),
             map_location=map_location

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import torch.optim as optim
+from torch.cuda.amp import autocast, GradScaler
 import logging
 import time
 from . import tools
@@ -20,6 +21,7 @@ class Trainer:
         self.network_manager = network_manager
 
         self.optimizer = optim.Adam(self.network_manager.model.parameters())
+        self.scaler = GradScaler()
 
         self.effective_batch_size = cfg.training.batch_size * tools.size
         self.training_data = TrainingData()
@@ -117,13 +119,15 @@ class Trainer:
 
     def _train_style_bank(self, content_id, content, style_id, style):
         self.optimizer.zero_grad()
-        output_image = self.network_manager.model(content, style_id)
-        content_loss, style_loss, tv_loss = self.network_manager.loss_network(
-            output_image, content, style, content_id, style_id
-        )
-        total_loss = content_loss + style_loss + tv_loss
-        total_loss.backward()
-        self.optimizer.step()
+        with autocast():
+            output_image = self.network_manager.model(content, style_id)
+            content_loss, style_loss, tv_loss = self.network_manager.loss_network(
+                output_image, content, style, content_id, style_id
+            )
+            total_loss = content_loss + style_loss + tv_loss
+        self.scaler.scale(total_loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
         self.training_data.update(
             total_loss=total_loss,
             content_loss=content_loss,
@@ -133,8 +137,10 @@ class Trainer:
 
     def _train_auto_encoder(self, content):
         self.optimizer.zero_grad()
-        output_image = self.network_manager.model(content)
-        loss = self.network_manager.loss_network(output_image, content)
-        loss.backward()
-        self.optimizer.step()
+        with autocast():
+            output_image = self.network_manager.model(content)
+            loss = self.network_manager.loss_network(output_image, content)
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
         self.training_data.update(reconstruction_loss=loss)

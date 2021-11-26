@@ -6,6 +6,7 @@ import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 import torchvision.models as models
 from copy import deepcopy
 from hydra.utils import to_absolute_path
@@ -52,7 +53,10 @@ class ContentLoss(nn.Module):
         return input
 
 
+@autocast(enabled=False)
 def gram_matrix(input):
+    if input.dtype is torch.half:
+        input = input.float()
     bsz, channels, h, w = input.size()
     features = input.view(bsz, channels, h * w)
     G = features @ torch.transpose(features, 1, 2)

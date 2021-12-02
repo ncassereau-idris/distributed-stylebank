@@ -1,0 +1,5 @@
+defaults:
+    - base_generation_conf
+
+generate_images: True
+nb_images: 90

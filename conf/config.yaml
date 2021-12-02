@@ -3,6 +3,7 @@ defaults:
     - training: stylebank
     - vgg_layers: stylebank
     - data: stylebank
+    - generation: stylebank
     - _self_
 
 seed: 4

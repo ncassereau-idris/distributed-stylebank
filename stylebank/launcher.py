@@ -7,6 +7,7 @@ import torch.distributed as dist
 import logging
 import numpy as np
 from .datasets import DataManager
+from .generator import Generator
 from .networks import NetworkManager
 from .trainer import Trainer
 from . import plasma
@@ -55,6 +56,9 @@ def launch(cfg):
 
     if cfg.training.train:
         Trainer(cfg, data_manager, network_manager).train()
+
+    if cfg.generation.generate_images:
+        Generator(cfg, data_manager, network_manager).generate()
 
 
 def cleanup(cfg):

@@ -10,7 +10,8 @@ from stylebank import (
     Configuration,
     TrainingConf,
     VGGConf,
-    DataConf
+    DataConf,
+    GenerationConf
 )
 
 
@@ -19,6 +20,7 @@ cs.store(name="base_config", node=Configuration)
 cs.store(group="training", name="base_training_conf", node=TrainingConf)
 cs.store(group="vgg_layers", name="base_vgg_conf", node=VGGConf)
 cs.store(group="data", name="base_data_conf", node=DataConf)
+cs.store(group="generation", name="base_generation_conf", node=GenerationConf)
 
 
 @hydra.main(config_path="conf", config_name="config")

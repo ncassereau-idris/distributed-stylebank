@@ -12,6 +12,79 @@ from .dataclasses import TrainingData
 log = logging.getLogger(__name__)
 
 
+class MultiOptimizer:
+
+    def __init__(self, cfg, network_manager):
+        self.cfg = cfg
+        self.network_manager = network_manager
+
+        self.encoder_ae_optim = self._make_optimizer(
+            self.network_manager.model.module.encoder_net
+        )
+        self.encoder_sb_optim = self._make_optimizer(
+            self.network_manager.model.module.encoder_net
+        )
+        self.decoder_ae_optim = self._make_optimizer(
+            self.network_manager.model.module.decoder_net
+        )
+        self.decoder_sb_optim = self._make_optimizer(
+            self.network_manager.model.module.decoder_net
+        )
+        self.stylebank_optim = [
+            self._make_optimizer(
+                self.network_manager.model.module.style_bank[i]
+            ) for i in range(len(
+                self.network_manager.model.module.style_bank
+            ))
+        ]
+        self.all_optim = [
+            self.encoder_ae_optim, self.encoder_sb_optim,
+            self.decoder_ae_optim, self.decoder_sb_optim
+        ] + self.stylebank_optim
+        self.scaler = GradScaler()
+
+    def _make_optimizer(self, model):
+        return optim.Adam(
+            model.parameters(),
+            lr=self.cfg.training.learning_rate
+        )
+
+    def adjust_learning_rate(self, step):
+        lr_step = step / self.cfg.training.adjust_learning_rate_interval
+        lr = self.cfg.training.learning_rate * tools.size
+        lr = max(lr * (0.8 ** (lr_step)), 1e-6)
+        for optimizer in self.all_optim:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+        return lr
+
+    def zero_grad(self):
+        for optimizer in self.all_optim:
+            optimizer.zero_grad()
+
+    def _step_ae(self):
+        self.scaler.step(self.encoder_ae_optim)
+        self.scaler.step(self.decoder_ae_optim)
+        # self.encoder_ae_optim.step()
+        # self.decoder_ae_optim.step()
+
+    def _step_sb(self, style_id):
+        self.scaler.step(self.encoder_sb_optim)
+        self.scaler.step(self.decoder_sb_optim)
+        # self.encoder_sb_optim.step()
+        # self.decoder_sb_optim.step()
+        for idx in style_id:
+            # self.stylebank_optim[idx].step()
+            self.scaler.step(self.stylebank_optim[idx])
+
+    def step(self, style_id=None):
+        if style_id is None:
+            self._step_ae()
+        else:
+            self._step_sb(style_id)
+        self.scaler.update()
+
+
 class Trainer:
 
     def __init__(self, cfg, data_manager, network_manager):
@@ -20,8 +93,7 @@ class Trainer:
         self.data_manager = data_manager
         self.network_manager = network_manager
 
-        self.optimizer = optim.Adam(self.network_manager.model.parameters())
-        self.scaler = GradScaler()
+        self.optimizer = MultiOptimizer(cfg=cfg, network_manager=network_manager)
 
         self.effective_batch_size = cfg.training.batch_size * tools.size
         self.training_data = TrainingData()
@@ -30,13 +102,6 @@ class Trainer:
             self.network_manager.loss_network.preload(
                 *self.data_manager.make_preload_dataloaders()
             )
-
-    def adjust_learning_rate(self, step):
-        lr = self.cfg.training.learning_rate * tools.size
-        lr = max(lr * (0.8 ** (step)), 1e-6)
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-        return lr
 
     def synchronise_data(self):
         self.training_data = self.training_data.merge()
@@ -67,9 +132,8 @@ class Trainer:
         )
 
     def train(self):
-        dataloader = self.data_manager.training_dataloader
+        dataloader = self.data_manager.make_training_dataloader()
         step = 0
-        self.adjust_learning_rate(step)
         T = self.cfg.training.consecutive_style_step + 1
 
         self.train_beginning = time.perf_counter()
@@ -100,11 +164,7 @@ class Trainer:
                     self.training_data.reset()
 
                 if step % self.cfg.training.adjust_learning_rate_interval == 0:
-                    lr_step = (
-                        step /
-                        self.cfg.training.adjust_learning_rate_interval
-                    )
-                    new_lr = self.adjust_learning_rate(lr_step)
+                    new_lr = self.optimizer.adjust_learning_rate(step)
                     log.info(f"Learning rate decay: {new_lr:.6f}")
 
             self.log_epoch(epoch)
@@ -125,9 +185,9 @@ class Trainer:
                 output_image, content, style, content_id, style_id
             )
             total_loss = content_loss + style_loss + tv_loss
-        self.scaler.scale(total_loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        self.optimizer.scaler.scale(total_loss).backward()
+        # total_loss.backward()
+        self.optimizer.step(style_id=style_id)
         self.training_data.update(
             total_loss=total_loss,
             content_loss=content_loss,
@@ -140,7 +200,7 @@ class Trainer:
         with autocast():
             output_image = self.network_manager.model(content)
             loss = self.network_manager.loss_network(output_image, content)
-        self.scaler.scale(loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        self.optimizer.scaler.scale(loss).backward()
+        # loss.backward()
+        self.optimizer.step(style_id=None)
         self.training_data.update(reconstruction_loss=loss)

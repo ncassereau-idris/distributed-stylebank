@@ -59,7 +59,7 @@ class PhotoDataset(Dataset):
     def load_image(self, filename):
         image = read_image(filename)
         image = TF.to_pil_image(image)
-        return self.transform(image)
+        return self.transform(image).cuda()
 
     def get_image_from_filename(self, filename):
         return self.get_image_from_idx(self.filenames.index(filename))
@@ -134,9 +134,8 @@ class DataManager:
         self.cfg = cfg
         self.transform = transforms.Compose([
             Resize(513),
-            transforms.RandomCrop([513, 513]),
+            transforms.CenterCrop([513, 513]),
             transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
         self.load_datasets()
         if self.cfg.training.train:
@@ -150,6 +149,7 @@ class DataManager:
             store_transformed=self.cfg.data.store_transformed,
             preload=self.cfg.data.preload_transformed
         )
+
         log.info(
             f"Real pictures dataset has {len(self.content_dataset)} samples"
         )
@@ -164,41 +164,48 @@ class DataManager:
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
-    def make_training_dataloader(self):
-        self.training_dataset = TrainingDataset(
-            self.cfg, self.content_dataset, self.style_dataset
-        )
-        self.training_sampler = DistributedSampler(
-            self.training_dataset,
+    def _distributed_sampler(self, dataset, shuffle=False, **kwargs):
+        sampler = DistributedSampler(
+            dataset,
             num_replicas=tools.size,
             rank=tools.rank,
-            shuffle=True
+            shuffle=shuffle,
+            **kwargs
         )
-        self.training_dataloader = DataLoader(
-            self.training_dataset,
+        return sampler
+
+    def _dataloader(self, dataset, sampler=None, **kwargs):
+        if sampler is None:
+            sampler = self._distributed_sampler(dataset)
+        dataloader = DataLoader(
+            dataset,
             batch_size=self.cfg.training.batch_size,
-            sampler=self.training_sampler
+            sampler=sampler,
+            **kwargs
         )
+        return dataloader
+
+    def make_training_dataloader(self):
+        training_dataset = TrainingDataset(
+            self.cfg, self.content_dataset, self.style_dataset
+        )
+        return self._dataloader(training_dataset)
 
     def make_preload_dataloaders(self):
-        content_sampler = DistributedSampler(
-            self.content_dataset,
-            num_replicas=tools.size,
-            rank=tools.rank
-        )
-        content_dataloader = DataLoader(
-            self.content_dataset,
-            batch_size=self.cfg.training.batch_size,
-            sampler=content_sampler
-        )
-        style_sampler = DistributedSampler(
-            self.style_dataset,
-            num_replicas=tools.size,
-            rank=tools.rank
-        )
-        style_dataloader = DataLoader(
-            self.style_dataset,
-            batch_size=self.cfg.training.batch_size,
-            sampler=style_sampler
-        )
+        content_dataloader = self._dataloader(self.content_dataset)
+        style_dataloader = self._dataloader(self.style_dataset)
         return content_dataloader, style_dataloader
+
+    def cycle(self, iterable):
+        # This version of cycle shuffles the dataset between
+        # each epoch unlike itertools' version
+        while True:
+            for x in iterable:
+                yield x
+
+    def make_generation_dataloader(self):
+        combined_dataset = TrainingDataset(
+            self.cfg, self.content_dataset, self.style_dataset
+        )
+        dataloader = self._dataloader(combined_dataset)
+        return self.cycle(dataloader)

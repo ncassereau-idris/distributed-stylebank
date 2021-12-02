@@ -173,11 +173,24 @@ class DataConf:
 
 
 @dataclass
+class GenerationConf:
+
+    generate_images: bool = field(default=False, metadata={
+        "help": "whether or not to generate a folder of images"
+    })
+
+    nb_images: int = field(default=5000, metadata={
+        "help": "number of images to generate"
+    })
+
+
+@dataclass
 class Configuration:
 
     training: TrainingConf = TrainingConf()
     vgg_layers: VGGConf = VGGConf()
     data: DataConf = DataConf()
+    generation: GenerationConf = GenerationConf()
 
     seed: int = field(default=4, metadata={
         "help": "seed"
@@ -201,6 +214,9 @@ class MovingAverage:
 
     def __str__(self):
         return f"{self.data:.6f}"
+
+    def __truediv__(self, int_):
+        return self.data / int_
 
 
 @dataclass
@@ -259,21 +275,21 @@ class TrainingData:
 
     def log(self):
         losses = [
-            f"Total loss: {self.total_loss:.6f}",
-            f"Content loss: {self.content_loss:.6f}",
-            f"Style loss: {self.style_loss:.6f}",
-            f"Regularizer loss: {self.regularizer_loss:.6f}",
-            f"Reconstruction loss: {self.reconstruction_loss:.6f}"
+            f"Total loss: {self.total_loss / 666:.6f}",
+            f"Content loss: {self.content_loss / 666:.6f}",
+            f"Style loss: {self.style_loss / 666:.6f}",
+            f"Regularizer loss: {self.regularizer_loss / 666:.6f}",
+            f"Reconstruction loss: {self.reconstruction_loss / 333:.6f}"
         ]
         return " | ".join(losses)
 
     def log_epoch(self):
         losses = [
-            f"Total loss: {str(self.epoch_total_loss)}",
-            f"Content loss: {str(self.epoch_content_loss)}",
-            f"Style loss: {str(self.epoch_style_loss)}",
-            f"Regularizer loss: {str(self.epoch_regularizer_loss)}",
-            f"Reconstruction loss: {str(self.epoch_reconstruction_loss)}",
+            f"Total loss: {str(self.epoch_total_loss / 666)}",
+            f"Content loss: {str(self.epoch_content_loss / 666)}",
+            f"Style loss: {str(self.epoch_style_loss / 666)}",
+            f"Regularizer loss: {str(self.epoch_regularizer_loss / 666)}",
+            f"Reconstruction loss: {str(self.epoch_reconstruction_loss / 333)}",
         ]
         return " | ".join(losses)
 

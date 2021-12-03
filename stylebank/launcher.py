@@ -26,12 +26,6 @@ class Rank0Filter(logging.Filter):
 
 
 def init(cfg):
-    dist.init_process_group(
-        backend='nccl',
-        world_size=tools.size,
-        rank=tools.rank
-    )
-
     for handler in logging.root.handlers:
         handler.addFilter(Rank0Filter())
 

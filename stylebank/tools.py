@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 class Lock:
     # This lock is system-wide and does not need to be communicated to
     # other MPI processes. They only need to agree on the index
-    # associated with the lock, which could be a predefinedsequence of
+    # associated with the lock, which could be a predefined sequence of
     # integers or a random sequence with the same seed for each process.
     def __init__(self, idx):
         self.lockfile = f"/tmp/monet_{idx}.lock"
@@ -65,7 +65,7 @@ def mkdir(*args):
     except FileExistsError:  # folder already exists
         pass
     else:
-        log.info("Created a weights subfolder to store model weights")
+        log.info(f"Subfolder {path} created!")
     finally:
         return Path(path)
 

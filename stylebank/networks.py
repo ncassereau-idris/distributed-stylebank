@@ -6,11 +6,13 @@ import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 import torchvision.models as models
 from copy import deepcopy
 from hydra.utils import to_absolute_path
 import os
 import logging
+import pickle
 from . import tools
 from .plasma import PlasmaStorage
 
@@ -20,7 +22,7 @@ log = logging.getLogger(__name__)
 
 class ContentLoss(nn.Module):
 
-    def __init__(self, weight, store=False):
+    def __init__(self, weight, store=False, name=None):
         super(ContentLoss, self).__init__()
         # we 'detach' the target content from the tree used
         # to dynamically compute the gradient: this is a stated value,
@@ -30,20 +32,21 @@ class ContentLoss(nn.Module):
         self.target = None
         self.mode = 'learn'
         self.weight = weight
+        self.name = name
 
         self.store = store
         self.target_ids = None
         if store:
-            self.storage = PlasmaStorage(autocuda=True)
+            self.storage = PlasmaStorage(autocuda=True, name=name)
 
     def forward(self, input):
         if self.mode == 'loss':
-            if (not self.store) or self.target_ids is None:
-                self.loss = self.weight * F.mse_loss(input, self.target)
-            else:
-                self.loss = self.weight * F.mse_loss(
-                    input, self.storage[self.target_ids]
-                )
+            target = (
+                self.storage[self.target_ids]
+                if self.store and self.target_ids is not None
+                else self.target
+            )
+            self.loss = self.weight * F.mse_loss(input, target)
         elif self.mode == 'learn':
             self.target = input.detach()
             if self.store and self.target_ids is not None:
@@ -51,42 +54,45 @@ class ContentLoss(nn.Module):
         return input
 
 
+@autocast(enabled=False)
 def gram_matrix(input):
-    bsz, channels, h, w = input.size()
-    features = input.view(bsz, channels, h * w)
-    G = features @ torch.transpose(features, 1, 2)
-    return G.div(channels * h * w)
+    if input.dtype is torch.half:
+        input = input.float()
+    bsz, channels, height, width = input.size()
+    features = input.view(bsz * channels, height * width)
+    G = torch.mm(features, features.t())
+    return G.div(bsz * channels * height * width)
 
 
 class StyleLoss(nn.Module):
 
-    def __init__(self, weight, store=False):
+    def __init__(self, weight, store=False, name=None):
         super(StyleLoss, self).__init__()
         self.target = None
         self.mode = 'learn'
         self.weight = weight
+        self.name = name
 
         self.store = store
         self.target_ids = None
         if store:
-            self.storage = PlasmaStorage(autocuda=True)
+            self.storage = PlasmaStorage(autocuda=True, name=name)
 
     def forward(self, input):
         if self.mode == 'loss':
             G = gram_matrix(input)
-            if (not self.store) or self.target_ids is None:
-                self.loss = self.weight * F.mse_loss(G, self.target)
-            else:
-                G_target = self.storage[self.target_ids]
-                self.loss = self.weight * F.mse_loss(
-                    G, G_target
-                )
+            target = (
+                self.storage[self.target_ids]
+                if self.store and self.target_ids is not None
+                else self.target
+            )
+            G_target = gram_matrix(target)
+            self.loss = self.weight * F.mse_loss(G, G_target)
         elif self.mode == 'learn':
-            G = gram_matrix(input)
             if self.store and self.target_ids is not None:
-                self.storage[self.target_ids] = G.detach()
+                self.storage[self.target_ids] = input.detach()
             else:
-                self.target = G.detach()
+                self.target = input.detach()
         return input
 
 
@@ -98,6 +104,22 @@ def init_vgg(cfg):
     vgg = vgg.cuda()
     vgg = vgg.eval()
     return vgg
+
+
+class Normalization(nn.Module):
+    def __init__(self):
+        super(Normalization, self).__init__()
+        # .view the mean and std to make them [C x 1 x 1] so that they can
+        # directly work with image Tensor of shape [B x C x H x W].
+        # B is batch size. C is number of channels. H is height and W is width.
+        mean = torch.tensor([0.485, 0.456, 0.406]).cuda()
+        std = torch.tensor([0.229, 0.224, 0.225]).cuda()
+        self.mean = mean.view(-1, 1, 1)
+        self.std = std.view(-1, 1, 1)
+
+    def forward(self, img):
+        # normalize img
+        return (img - self.mean) / self.std
 
 
 class LossNetwork(nn.Module):
@@ -113,7 +135,7 @@ class LossNetwork(nn.Module):
 
         # assuming that cnn is a nn.Sequential, so we make a new nn.Sequential
         # to put in modules that are supposed to be activated sequentially
-        model = nn.Sequential()
+        model = nn.Sequential(Normalization())
 
         i = 0  # increment every time we see a conv
         for layer in cnn.children():
@@ -137,7 +159,8 @@ class LossNetwork(nn.Module):
             if name in cfg.vgg_layers.content.keys():
                 content_loss = ContentLoss(
                     weight=cfg.vgg_layers.content[name],
-                    store=cfg.vgg_layers.store
+                    store=cfg.vgg_layers.store,
+                    name="content_"+name
                 )
                 model.add_module("content_loss_{}".format(i), content_loss)
                 content_losses.append(content_loss)
@@ -145,7 +168,8 @@ class LossNetwork(nn.Module):
             if name in cfg.vgg_layers.style.keys():
                 style_loss = StyleLoss(
                     weight=cfg.vgg_layers.style[name],
-                    store=cfg.vgg_layers.store
+                    store=cfg.vgg_layers.store,
+                    name="style_"+name
                 )
                 model.add_module("style_loss_{}".format(i), style_loss)
                 style_losses.append(style_loss)
@@ -176,6 +200,7 @@ class LossNetwork(nn.Module):
         for cl in self.content_losses:
             cl.mode = 'learn'
             cl.target_ids = target_ids
+        if target_ids is not None:
             self.known_contents.update(target_ids)
         for sl in self.style_losses:
             sl.mode = 'nop'
@@ -195,6 +220,7 @@ class LossNetwork(nn.Module):
         for sl in self.style_losses:
             sl.mode = 'learn'
             sl.target_ids = target_ids
+        if target_ids is not None:
             self.known_styles.update(target_ids)
         self.model(input)
 
@@ -354,57 +380,70 @@ class NetworkManager:
 
     def __init__(self, cfg, style_quantity):
         self.cfg = cfg
+        self.model = StyleBankNet(style_quantity).cuda()
 
+        if cfg.data.load_model:
+            self.load_model()
         self.model = DistributedDataParallel(
-            StyleBankNet(style_quantity).cuda(),
+            self.model,
             device_ids=[tools.local_rank],
             find_unused_parameters=True
         )
-        if cfg.data.load_model:
-            self.load_model()
 
         if cfg.training.train:
             cnn = init_vgg(cfg)
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
-    def save_models(self):
+    def save_models(self, epoch, training_data):
         if tools.rank != 0:
             return
-        try:
-            os.mkdir(self.cfg.data.weights_subfolder)
-        except FileExistsError:  # folder already exists
-            pass
-        else:
-            log.info("Created a weights subfolder to store model weights")
+        path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
         log.info("Storing model weights...")
+
         torch.save(
             self.model.module.state_dict(),
-            self.cfg.data.model_weight_filename
+            path / self.cfg.data.model_weight_filename
         )
         torch.save(
             self.model.module.encoder_net.state_dict(),
-            self.cfg.data.encoder_weight_filename
+            path / self.cfg.data.encoder_weight_filename
         )
         torch.save(
             self.model.module.decoder_net.state_dict(),
-            self.cfg.data.decoder_weight_filename
+            path / self.cfg.data.decoder_weight_filename
         )
         for i in range(len(self.model.module.style_bank)):
             torch.save(
                 self.model.module.style_bank[i].state_dict(),
-                self.cfg.data.bank_weight_filename.format(i)
+                path / self.cfg.data.bank_weight_filename.format(i)
             )
+
+        losses_file = os.path.join(self.cfg.data.weights_subfolder, "losses")
+        if os.path.exists(losses_file):
+            with open(losses_file, "rb") as file_:
+                D = pickle.load(file_)
+        else:
+            D = list()
+        D.append({
+            "Total loss": training_data.epoch_total_loss,
+            "Content loss": training_data.epoch_content_loss,
+            "Style loss": training_data.epoch_style_loss,
+            "Regularizer loss": training_data.epoch_regularizer_loss,
+            "Reconstruction loss": training_data.epoch_reconstruction_loss
+        })
+        with open(losses_file, "wb") as file_:
+            pickle.dump(D, file_)
+
         log.info("Model saved!")
 
     def load_model(self):
         dist.barrier()
-        if tools.rank != 0:
-            return
         log.info("Loading model...")
         map_location = {'cuda:%d' % 0: 'cuda:%d' % tools.local_rank}
         self.model.load_state_dict(torch.load(
             to_absolute_path(os.path.join(
                 self.cfg.data.folder,
+                self.cfg.data.weights_subfolder,
                 self.cfg.data.model_weight_filename
             )),
             map_location=map_location

@@ -3,14 +3,17 @@
 
 import hydra
 from hydra.core.config_store import ConfigStore
+import torch.distributed as dist
 from stylebank import (
+    tools,
     init,
     launch,
     cleanup,
     Configuration,
     TrainingConf,
     VGGConf,
-    DataConf
+    DataConf,
+    GenerationConf
 )
 
 
@@ -19,6 +22,7 @@ cs.store(name="base_config", node=Configuration)
 cs.store(group="training", name="base_training_conf", node=TrainingConf)
 cs.store(group="vgg_layers", name="base_vgg_conf", node=VGGConf)
 cs.store(group="data", name="base_data_conf", node=DataConf)
+cs.store(group="generation", name="base_generation_conf", node=GenerationConf)
 
 
 @hydra.main(config_path="conf", config_name="config")
@@ -29,4 +33,10 @@ def main(cfg: Configuration) -> None:
 
 
 if __name__ == "__main__":
+    dist.init_process_group(
+        backend='nccl',
+        world_size=tools.size,
+        rank=tools.rank
+    )
+    dist.barrier()
     main()

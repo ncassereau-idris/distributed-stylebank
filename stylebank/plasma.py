@@ -43,9 +43,10 @@ plasma_server = PlasmaServer()
 
 class AbstractStorage:
 
-    def __init__(self, autocuda=False):
+    def __init__(self, autocuda=False, name=None):
         self._storage = dict()
         self.autocuda = autocuda
+        self.name = name
 
     def _maybe_cuda(self, value):
         if self.autocuda and isinstance(value, torch.Tensor):
@@ -104,9 +105,8 @@ class Storage(AbstractStorage):
 
 class PlasmaStorage(AbstractStorage):
 
-    def __init__(self, autocuda=False):
-        self._storage = dict()
-        self.autocuda = autocuda
+    def __init__(self, *args, **kwargs):
+        super(PlasmaStorage, self).__init__(*args, **kwargs)
         self.gen = np.random.RandomState(None)
 
     @property
@@ -123,12 +123,12 @@ class PlasmaStorage(AbstractStorage):
         [buf] = self.client.get_buffers([object_id])
         reader = pa.BufferReader(buf)
         tensor = pa.ipc.read_tensor(reader)
-        return torch.from_numpy(np.array(tensor.to_numpy()))
+        return torch.from_numpy(np.array(tensor.to_numpy())).float()
 
     def _register(self, idx, value):
         if isinstance(idx, torch.Tensor):
             idx = idx.item()
-        tensor = pa.Tensor.from_numpy(value.numpy())
+        tensor = pa.Tensor.from_numpy(value.half().numpy())
         object_id = pa.plasma.ObjectID(self.gen.bytes(20))
         data_size = pa.ipc.get_tensor_size(tensor)
         buf = self.client.create(object_id, data_size)

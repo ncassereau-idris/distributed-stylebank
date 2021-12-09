@@ -51,7 +51,8 @@ class Generator:
                 style = tools.prepare_imgs(style)
 
             self.save_side_by_side(content, style, output)
-            self.save_output(content)
+            self.save_output(output)
+        dist.barrier()
         log.info("Done!")
 
     def format_idx(self, idx):
@@ -65,16 +66,18 @@ class Generator:
         for i in range(len(content)):
             img = np.concatenate((content[i], style[i], output[i]), axis=1)
             filename = f"img{self.format_idx(self.idx_1)}_sbs.jpg"
-            self.save(img, "images_sbs", filename)
+            self.save(img, "images_sbs", filename, resize=False)
             self.idx_1 += tools.size
 
     def save_output(self, pictures):
         for i, img in enumerate(pictures):
             filename = f"img{self.format_idx(self.idx_2)}.jpg"
-            self.save(img, "images", filename)
+            self.save(img, "images", filename, resize=True)
             self.idx_2 += tools.size
 
-    def save(self, img, folder, filename):
+    def save(self, img, folder, filename, resize=False):
         path = os.path.join(folder, filename)
         im = Image.fromarray(img)
+        if resize:
+            im = im.resize((256, 256))
         im.save(path)

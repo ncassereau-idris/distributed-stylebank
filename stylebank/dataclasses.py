@@ -183,6 +183,14 @@ class GenerationConf:
         "help": "number of images to generate"
     })
 
+    generate_videos: bool = field(default=False, metadata={
+        "help": "whether or not to make a style-transfered video"
+    })
+
+    files: Dict[str, int] = field(default_factory=dict, metadata={
+        "help": "links of videos to transfer and index of style to apply"
+    })
+
 
 @dataclass
 class Configuration:

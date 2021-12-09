@@ -1,2 +1,3 @@
 # stylebank
-StyleBank for Kaggle's Monet competition
+
+Parallelized version of StyleBank

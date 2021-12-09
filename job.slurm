@@ -4,11 +4,13 @@
 #SBATCH --error=slurm.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --time=00:10:00
-#SBATCH -C v100-32g
+#SBATCH --time=50:00:00
+#SBATCH --begin=03:00
+#SBATCH --nice=100000
+##SBATCH -C v100-32g
 #SBATCH --gres=gpu:4
-#SBATCH --account=sos@gpu
-#SBATCH --qos=qos_gpu-dev
+#SBATCH --account=dwd@gpu
+#SBATCH --qos=qos_gpu-t4
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 

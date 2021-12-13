@@ -164,12 +164,12 @@ class DataManager:
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
-    def _distributed_sampler(self, dataset, shuffle=False, **kwargs):
+    def _distributed_sampler(self, dataset, **kwargs):
         sampler = DistributedSampler(
             dataset,
             num_replicas=tools.size,
             rank=tools.rank,
-            shuffle=shuffle,
+            shuffle=False,
             **kwargs
         )
         return sampler

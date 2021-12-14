@@ -12,6 +12,7 @@ from .networks import NetworkManager
 from .trainer import Trainer
 from . import plasma
 from . import tools
+from .video import VideoGenerator
 
 
 log = logging.getLogger(__name__)
@@ -53,6 +54,10 @@ def launch(cfg):
 
     if cfg.generation.generate_images:
         Generator(cfg, data_manager, network_manager).generate()
+
+    if cfg.generation.generate_videos:
+        VideoGenerator(cfg, data_manager, network_manager).generate()
+
 
 
 def cleanup(cfg):

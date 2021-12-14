@@ -394,8 +394,6 @@ class NetworkManager:
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
     def save_models(self, epoch, training_data):
-        # if tools.rank != 0:
-        #     return
         if tools.rank == 0:
             path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
         dist.barrier()

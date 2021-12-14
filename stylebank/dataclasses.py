@@ -150,13 +150,6 @@ class DataConf:
         }
     )
 
-    model_weight_filename: str = field(
-        default="weights/model.pth",
-        metadata={
-            "help": "filename for model weights"
-        }
-    )
-
     encoder_weight_filename: str = field(
         default="weights/encoder.pth",
         metadata={

@@ -27,7 +27,6 @@ class PhotoDataset(Dataset):
         self, path, transform, quantity=-1,
         store_transformed=False, preload=False
     ):
-        # quantity = 300
         assert store_transformed or not preload
         self.store_transformed = store_transformed
         self.filenames = glob.glob(

@@ -53,7 +53,7 @@ class Generator:
             self.save_side_by_side(content, style, output)
             self.save_output(output)
         dist.barrier()
-        log.info("Done!")
+        log.info("Paintings generation done!")
 
     def format_idx(self, idx):
         S = str(idx)

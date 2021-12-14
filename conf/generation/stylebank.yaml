@@ -1,9 +1,9 @@
 defaults:
     - base_generation_conf
 
-generate_images: True
+generate_images: False
 nb_images: 9000
 
 generate_videos: True
 files:
-    tmp: 0
+    maison_prairie.mp4: 245

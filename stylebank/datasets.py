@@ -27,7 +27,6 @@ class PhotoDataset(Dataset):
         self, path, transform, quantity=-1,
         store_transformed=False, preload=False
     ):
-        # quantity = 300
         assert store_transformed or not preload
         self.store_transformed = store_transformed
         self.filenames = glob.glob(
@@ -164,12 +163,12 @@ class DataManager:
         )
         log.info(f"Paintings dataset has {len(self.style_dataset)} samples")
 
-    def _distributed_sampler(self, dataset, shuffle=False, **kwargs):
+    def _distributed_sampler(self, dataset, **kwargs):
         sampler = DistributedSampler(
             dataset,
             num_replicas=tools.size,
             rank=tools.rank,
-            shuffle=shuffle,
+            shuffle=False,
             **kwargs
         )
         return sampler

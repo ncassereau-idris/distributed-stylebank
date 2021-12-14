@@ -1,7 +1,7 @@
 defaults:
     - base_training_conf
 
-train: True
+train: False
 consecutive_style_step: 2
 batch_size: 8
 repeat: 100
@@ -9,6 +9,6 @@ learning_rate: 0.001
 content_weight: 1
 style_weight: 1000000
 reg_weight: 0.00001
-epochs: 1000
+epochs: 250
 log_interval: 50
 adjust_learning_rate_interval: 5000

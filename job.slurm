@@ -17,6 +17,7 @@
 cd ${SLURM_SUBMIT_DIR}
 
 module purge
+module load ffpmeg/4.2.2
 module load pytorch-gpu/py3/1.10.0
 
 set -x

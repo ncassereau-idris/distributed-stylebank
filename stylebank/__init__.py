@@ -9,6 +9,7 @@ from . import networks
 from . import plasma
 from . import trainer
 from . import tools
+from . import video
 
 from .dataclasses import (
     Configuration,
@@ -23,11 +24,12 @@ from .networks import NetworkManager
 from .plasma import PlasmaStorage
 from .trainer import Trainer
 from .generator import Generator
+from .video import VideoGenerator
 
 __all__ = [
     "dataclasses", "datasets", "launcher", "networks",
     "trainer", "tools", "plasma", "generator",
     "Configuration", "TrainingConf", "VGGConf", "DataConf", "GenerationConf",
     "NetworkManager", "DataManager", "PlasmaStorage", "Trainer",
-    "Generator", "init", "launch", "cleanup"
+    "Generator", "VideoGenerator", "init", "launch", "cleanup"
 ]

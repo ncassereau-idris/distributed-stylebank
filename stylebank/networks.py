@@ -380,44 +380,43 @@ class NetworkManager:
 
     def __init__(self, cfg, style_quantity):
         self.cfg = cfg
-        self.model = StyleBankNet(style_quantity).cuda()
-
-        if cfg.data.load_model:
-            self.load_model()
         self.model = DistributedDataParallel(
-            self.model,
+            StyleBankNet(style_quantity).cuda(),
             device_ids=[tools.local_rank],
             find_unused_parameters=True
         )
+
+        if cfg.data.load_model:
+            self.load_model()
 
         if cfg.training.train:
             cnn = init_vgg(cfg)
             self.loss_network = LossNetwork(cfg, cnn).cuda()
 
     def save_models(self, epoch, training_data):
-        if tools.rank != 0:
-            return
-        path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
+        if tools.rank == 0:
+            path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
+        dist.barrier()
         log.info("Storing model weights...")
 
-        torch.save(
-            self.model.module.state_dict(),
-            path / self.cfg.data.model_weight_filename
-        )
-        torch.save(
-            self.model.module.encoder_net.state_dict(),
-            path / self.cfg.data.encoder_weight_filename
-        )
-        torch.save(
-            self.model.module.decoder_net.state_dict(),
-            path / self.cfg.data.decoder_weight_filename
-        )
-        for i in range(len(self.model.module.style_bank)):
+        if tools.rank == 0:
+            torch.save(
+                self.model.module.encoder_net.state_dict(),
+                path / self.cfg.data.encoder_weight_filename
+            )
+            torch.save(
+                self.model.module.decoder_net.state_dict(),
+                path / self.cfg.data.decoder_weight_filename
+            )
+
+        for i in range(tools.rank, len(self.model.module.style_bank), tools.size):
             torch.save(
                 self.model.module.style_bank[i].state_dict(),
                 path / self.cfg.data.bank_weight_filename.format(i)
             )
 
+        if tools.rank !=0:
+            return
         losses_file = os.path.join(self.cfg.data.weights_subfolder, "losses")
         if os.path.exists(losses_file):
             with open(losses_file, "rb") as file_:
@@ -425,11 +424,11 @@ class NetworkManager:
         else:
             D = list()
         D.append({
-            "Total loss": training_data.epoch_total_loss,
-            "Content loss": training_data.epoch_content_loss,
-            "Style loss": training_data.epoch_style_loss,
-            "Regularizer loss": training_data.epoch_regularizer_loss,
-            "Reconstruction loss": training_data.epoch_reconstruction_loss
+            "Total loss": training_data.epoch_total_loss.data,
+            "Content loss": training_data.epoch_content_loss.data,
+            "Style loss": training_data.epoch_style_loss.data,
+            "Regularizer loss": training_data.epoch_regularizer_loss.data,
+            "Reconstruction loss": training_data.epoch_reconstruction_loss.data
         })
         with open(losses_file, "wb") as file_:
             pickle.dump(D, file_)
@@ -439,13 +438,30 @@ class NetworkManager:
     def load_model(self):
         dist.barrier()
         log.info("Loading model...")
-        map_location = {'cuda:%d' % 0: 'cuda:%d' % tools.local_rank}
-        self.model.load_state_dict(torch.load(
+
+        self.model.module.encoder_net.load_state_dict(torch.load(
             to_absolute_path(os.path.join(
                 self.cfg.data.folder,
                 self.cfg.data.weights_subfolder,
-                self.cfg.data.model_weight_filename
+                self.cfg.data.encoder_weight_filename
             )),
-            map_location=map_location
+            map_location={'cuda:%d' % 0: 'cuda:%d' % tools.rank}
         ))
+        self.model.module.decoder_net.load_state_dict(torch.load(
+            to_absolute_path(os.path.join(
+                self.cfg.data.folder,
+                self.cfg.data.weights_subfolder,
+                self.cfg.data.decoder_weight_filename
+            )),
+            map_location={'cuda:%d' % 0: 'cuda:%d' % tools.rank}
+        ))
+        for i in range(len(self.model.module.style_bank)):
+            self.model.module.style_bank[i].load_state_dict(torch.load(
+                to_absolute_path(os.path.join(
+                    self.cfg.data.folder,
+                    self.cfg.data.weights_subfolder,
+                    self.cfg.data.bank_weight_filename.format(i)
+                )),
+            map_location={'cuda:%d' % (i % 4): 'cuda:%d' % tools.rank}
+            ))
         log.info("Model loaded!")

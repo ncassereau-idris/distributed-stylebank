@@ -106,6 +106,10 @@ def launch(cfg):
         if cfg.generation.generate_videos:
             VideoGenerator(cfg, data_manager, network_manager).generate()
 
+    if cfg.generation.generate_videos:
+        VideoGenerator(cfg, data_manager, network_manager).generate()
+
+
 
 def cleanup(cfg):
     plasma.plasma_server.kill()

@@ -10,7 +10,7 @@ photo: "${data.folder}/photo_jpg"
 store_transformed: False
 preload_transformed: False
 
-load_model: False
+load_model: True
 weights_subfolder: weights
 bank_weight_filename: "bank_{0}.pth"
 encoder_weight_filename: "encoder.pth"

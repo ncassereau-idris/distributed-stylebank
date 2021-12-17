@@ -3,3 +3,4 @@ torch
 hydra
 hydra-submitit-launcher
 pyarrow
+mlflow

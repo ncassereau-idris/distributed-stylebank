@@ -3,7 +3,6 @@
 
 import hydra
 from hydra.core.config_store import ConfigStore
-import torch.distributed as dist
 from stylebank import (
     tools,
     init,
@@ -33,10 +32,4 @@ def main(cfg: Configuration) -> None:
 
 
 if __name__ == "__main__":
-    dist.init_process_group(
-        backend='nccl',
-        world_size=tools.size,
-        rank=tools.rank
-    )
-    dist.barrier()
     main()

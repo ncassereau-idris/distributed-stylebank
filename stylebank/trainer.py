@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.cuda.amp import autocast, GradScaler
 import logging
 import time
+import mlflow
 from . import tools
 from .dataclasses import TrainingData
 
@@ -65,16 +66,11 @@ class MultiOptimizer:
     def _step_ae(self):
         self.scaler.step(self.encoder_ae_optim)
         self.scaler.step(self.decoder_ae_optim)
-        # self.encoder_ae_optim.step()
-        # self.decoder_ae_optim.step()
 
     def _step_sb(self, style_id):
         self.scaler.step(self.encoder_sb_optim)
         self.scaler.step(self.decoder_sb_optim)
-        # self.encoder_sb_optim.step()
-        # self.decoder_sb_optim.step()
         for idx in style_id:
-            # self.stylebank_optim[idx].step()
             self.scaler.step(self.stylebank_optim[idx])
 
     def step(self, style_id=None):
@@ -110,10 +106,13 @@ class Trainer:
         self.synchronise_data()
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
+        string, table = self.training_data.log()
+        if tools.rank == 0:
+            mlflow.log_metrics(table, step)
         log.info(
             f"Epoch {epoch} | " +
             f"Step {step} / {steps_per_epoch} | " +
-            self.training_data.log() +
+            string +
             f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {tools.format_duration(duration_epoch)}" +
             f" | Wall (training): {tools.format_duration(duration_training)}"
@@ -123,9 +122,13 @@ class Trainer:
         self.synchronise_data()
         duration_epoch = self.current_time - self.epoch_beginning
         duration_training = self.current_time - self.train_beginning
+        string, table = self.training_data.log_epoch()
+        if tools.rank == 0:
+            mlflow.log_metrics(table, epoch)
+            mlflow.log_artifact("main.log")
         log.info(
             f"Epoch {epoch} / {self.cfg.training.epochs} | " +
-            self.training_data.log_epoch() +
+            string +
             f" | Batch size: {self.effective_batch_size}" +
             f" | Wall (epoch): {tools.format_duration(duration_epoch)}" +
             f" | Wall (training): {tools.format_duration(duration_training)}"
@@ -176,6 +179,8 @@ class Trainer:
             "End of training (Total duration: "
             f"{tools.format_duration(total_duration)})"
         )
+        if tools.rank == 0:
+            mlflow.log_artifact("main.log")
 
     def _train_style_bank(self, content_id, content, style_id, style):
         self.optimizer.zero_grad()
@@ -186,7 +191,6 @@ class Trainer:
             )
             total_loss = content_loss + style_loss + tv_loss
         self.optimizer.scaler.scale(total_loss).backward()
-        # total_loss.backward()
         self.optimizer.step(style_id=style_id)
         self.training_data.update(
             total_loss=total_loss,
@@ -201,6 +205,5 @@ class Trainer:
             output_image = self.network_manager.model(content)
             loss = self.network_manager.loss_network(output_image, content)
         self.optimizer.scaler.scale(loss).backward()
-        # loss.backward()
         self.optimizer.step(style_id=None)
         self.training_data.update(reconstruction_loss=loss)

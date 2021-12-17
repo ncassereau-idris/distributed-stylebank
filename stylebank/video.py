@@ -13,6 +13,7 @@ from hydra.utils import to_absolute_path
 import time
 import pathlib
 import subprocess
+import mlflow
 from . import tools
 
 
@@ -138,6 +139,10 @@ class VideoGenerator:
             )
             subprocess.run(command, shell=True)
         dist.barrier()
+        if tools.rank == 0:
+            mlflow.log_artifact(
+                filename, artifact_path=os.path.join("videos", filename)
+            )
 
     def generate(self):
         for filename, style_id in self.cfg.generation.files.items():
@@ -146,3 +151,5 @@ class VideoGenerator:
             log.info(f"{filename} has been converted!")
         log.info("Video generation done!")
         dist.barrier()
+        if tools.rank == 0:
+            mlflow.log_artifact("main.log")

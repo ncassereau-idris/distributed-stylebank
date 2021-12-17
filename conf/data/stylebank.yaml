@@ -15,3 +15,6 @@ weights_subfolder: weights
 bank_weight_filename: "bank_{0}.pth"
 encoder_weight_filename: "encoder.pth"
 decoder_weight_filename: "decoder.pth"
+
+mlflow_uri: "mlruns"
+experiment_name: "Stylebank"

@@ -8,6 +8,7 @@ import math
 import logging
 from PIL import Image
 import os
+import mlflow
 from . import tools
 
 
@@ -54,6 +55,10 @@ class Generator:
             self.save_output(output)
         dist.barrier()
         log.info("Paintings generation done!")
+        if tools.rank == 0:
+            mlflow.log_artifacts("images", artifact_path="images")
+            mlflow.log_artifacts("images_sbs", artifact_path="images_sbs")
+            mlflow.log_artifact("main.log")
 
     def format_idx(self, idx):
         S = str(idx)

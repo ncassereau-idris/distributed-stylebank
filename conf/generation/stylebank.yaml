@@ -4,6 +4,6 @@ defaults:
 generate_images: False
 nb_images: 9000
 
-generate_videos: True
+generate_videos: False
 files:
     maison_prairie.mp4: 245

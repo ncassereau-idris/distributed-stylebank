@@ -5,6 +5,8 @@ from typing import Dict
 from dataclasses import dataclass, field
 import functools
 import torch.distributed as dist
+from hydra.utils import to_absolute_path
+from datetime import datetime
 from . import tools
 
 
@@ -164,6 +166,21 @@ class DataConf:
         }
     )
 
+    mlflow_uri: str = field(default=to_absolute_path("."), metadata={
+        "help": "where to save experiments with mlflow"
+    })
+
+    experiment_name: str = field(default="Stylebank", metadata={
+        "help": "name of the experiment for mlflow"
+    })
+
+    run_name: str = field(
+        default_factory=lambda: datetime.now().strftime("%Y-%b-%d %H:%M:%S"),
+        metadata={
+            "help": "Name of the run, by default current datetime"
+        }
+    )
+
 
 @dataclass
 class GenerationConf:
@@ -212,12 +229,6 @@ class MovingAverage:
         self.n += 1
         self.data /= self.n
         return self.data
-
-    def __str__(self):
-        return f"{self.data:.6f}"
-
-    def __truediv__(self, int_):
-        return self.data / int_
 
 
 @dataclass
@@ -275,24 +286,54 @@ class TrainingData:
             self.regularizer_loss += regularizer_loss.item()
 
     def log(self):
-        losses = [
-            f"Total loss: {self.total_loss / 666:.6f}",
-            f"Content loss: {self.content_loss / 666:.6f}",
-            f"Style loss: {self.style_loss / 666:.6f}",
-            f"Regularizer loss: {self.regularizer_loss / 666:.6f}",
-            f"Reconstruction loss: {self.reconstruction_loss / 333:.6f}"
-        ]
-        return " | ".join(losses)
+        D = self.get_iter_summary(as_float=True)
+        return " | ".join(f"{title}: {loss}" for title, loss in D.items()), D
 
     def log_epoch(self):
-        losses = [
-            f"Total loss: {str(self.epoch_total_loss / 666)}",
-            f"Content loss: {str(self.epoch_content_loss / 666)}",
-            f"Style loss: {str(self.epoch_style_loss / 666)}",
-            f"Regularizer loss: {str(self.epoch_regularizer_loss / 666)}",
-            f"Reconstruction loss: {str(self.epoch_reconstruction_loss / 333)}",
-        ]
-        return " | ".join(losses)
+        D = self.get_epoch_summary(as_float=True)
+        return " | ".join(f"{title}: {loss}" for title, loss in D.items()), D
+
+    def truncate(self, value, as_float=True):
+        string = f"{value:.6f}"
+        return float(string) if as_float else string
+
+    def get_iter_summary(self, as_float=True):
+        D = dict()
+        D["Total loss"] = self.truncate(
+            self.total_loss / 666, as_float=as_float
+        )
+        D["Content loss"] = self.truncate(
+            self.content_loss / 666, as_float=as_float
+        )
+        D["Style loss"] = self.truncate(
+            self.style_loss / 666, as_float=as_float
+        )
+        D["Regularizer loss"] = self.truncate(
+            self.regularizer_loss / 666, as_float=as_float
+        )
+        D["Reconstruction loss"] = self.truncate(
+            self.reconstruction_loss / 333, as_float=as_float
+        )
+        return D
+
+    def get_epoch_summary(self, as_float=True):
+        D = dict()
+        D["Epoch Total loss"] = self.truncate(
+            self.epoch_total_loss.data / 666, as_float=as_float
+        )
+        D["Epoch Content loss"] = self.truncate(
+            self.epoch_content_loss.data / 666, as_float=as_float
+        )
+        D["Epoch Style loss"] = self.truncate(
+            self.epoch_style_loss.data / 666, as_float=as_float
+        )
+        D["Epoch Regularizer loss"] = self.truncate(
+            self.epoch_regularizer_loss.data / 666, as_float=as_float
+        )
+        D["Epoch Reconstruction loss"] = self.truncate(
+            self.epoch_reconstruction_loss.data / 333, as_float=as_float
+        )
+        return D
 
     def __iadd__(self, other):
         self.style_loss += other.style_loss

@@ -13,6 +13,7 @@ from hydra.utils import to_absolute_path
 import os
 import logging
 import pickle
+import mlflow
 from . import tools
 from .plasma import PlasmaStorage
 
@@ -395,7 +396,7 @@ class NetworkManager:
 
     def save_models(self, epoch, training_data):
         if tools.rank == 0:
-            path = tools.mkdir(self.cfg.data.weights_subfolder, f"epoch_{epoch}")
+            path = tools.mkdir(self.cfg.data.weights_subfolder)
         dist.barrier()
         log.info("Storing model weights...")
 
@@ -415,21 +416,17 @@ class NetworkManager:
                 path / self.cfg.data.bank_weight_filename.format(i)
             )
 
+        dist.barrier()
         if tools.rank !=0:
             return
+        mlflow.log_artifacts(path, artifact_path=str(path / f"epoch_{epoch}"))
         losses_file = os.path.join(self.cfg.data.weights_subfolder, "losses")
         if os.path.exists(losses_file):
             with open(losses_file, "rb") as file_:
                 D = pickle.load(file_)
         else:
             D = list()
-        D.append({
-            "Total loss": training_data.epoch_total_loss.data,
-            "Content loss": training_data.epoch_content_loss.data,
-            "Style loss": training_data.epoch_style_loss.data,
-            "Regularizer loss": training_data.epoch_regularizer_loss.data,
-            "Reconstruction loss": training_data.epoch_reconstruction_loss.data
-        })
+        D.append(training_data.get_epoch_summary(as_float=True))
         with open(losses_file, "wb") as file_:
             pickle.dump(D, file_)
 
